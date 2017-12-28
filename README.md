@@ -7,4 +7,7 @@
 - `pip install -r requirements.txt`
 
 ## To code
-- `jupyter notebook`
+- run the commands in start.sh
+
+## Interesting stats about the data set
+- (16000, 1) is the size of the largest audio vector 
