@@ -42,7 +42,7 @@ def prepare_data(inp_folder_path, skip_folders=("_background_noise_",)):
     for token_folder in os.scandir(inp_folder_path):
         if token_folder.name in skip_folders or not token_folder.is_dir():
             continue
-        classes.append(token_folder)
+        classes.append(token_folder.name)
         for audio_file in os.scandir(token_folder):
             x_raw_audio.append(load_wav_file(os.path.abspath(audio_file.path)))
             y_raw.append(token_folder.name)
