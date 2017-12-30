@@ -1,0 +1,2 @@
+model_checkpoint_path: "cnn-tf-model"
+all_model_checkpoint_paths: "cnn-tf-model"
