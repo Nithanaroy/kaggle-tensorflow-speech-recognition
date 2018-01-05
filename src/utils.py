@@ -8,6 +8,7 @@ from sklearn.preprocessing import label_binarize
 import numpy as np
 import h5py
 import gc
+from datetime import datetime
 
 AUDIO_PADDING = 0  # padding value for audio vectors to make them of equal length
 
@@ -32,7 +33,7 @@ def load_wav_file(filename):
             feed_dict={wav_filename_placeholder: filename}).audio.flatten()
 
 
-def prepare_data(inp_folder_path, skip_folders=("_background_noise_",)):
+def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
     """
     This requires huge memory as we load the entire dataset into memory and process it
     """
@@ -43,32 +44,29 @@ def prepare_data(inp_folder_path, skip_folders=("_background_noise_",)):
         if token_folder.name in skip_folders or not token_folder.is_dir():
             continue
         classes.append(token_folder.name)
-        for audio_file in os.scandir(token_folder):
+        for audio_file in os.scandir(token_folder.path):
             x_raw_audio.append(load_wav_file(os.path.abspath(audio_file.path)))
             y_raw.append(token_folder.name)
-        print("Completed processing %s" % token_folder.name)
+        print("%s: Completed processing %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), token_folder.name))
+
+    print("%s: Vectorized all wav files" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
 
     # Assumption: padding with zeros to handle audio clips of unequal lengths
     df = pd.DataFrame(x_raw_audio, dtype=float).fillna(AUDIO_PADDING)
-    print("Completed padding")
+    print("%s: Completed padding" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     x_raw_audio = None
     gc.collect()  # free up some memory
 
     X = np.array(df)
-    print("Computed X")
+    print("%s: Computed X" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
     df = None
     gc.collect()
 
     Y = np.array(y_raw, dtype='|S9')  # to binary strings to persist on disk
-    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
-    print("Finished splitting all data to train-test")
-    X = None
-    y = None
-    gc.collect()
 
     classes = np.array(classes, dtype='|S9')  # to binary strings to persist on disk
 
-    return X_train, X_test, y_train, y_test, classes
+    return X, Y, classes
 
 
 def save_data(X_train, X_test, y_train, y_test, classes, data_folder):
@@ -86,8 +84,7 @@ def save_data(X_train, X_test, y_train, y_test, classes, data_folder):
     print("Saved the data to %s, %s and %s" % (train_data_file, test_data_file, classes_data_file))
 
 
-def load_data(train_data_file="../data/train_sounds.h5",
-              test_data_file="../data/test_sounds.h5",
+def load_data(train_data_file="../data/train_sounds.h5", test_data_file="../data/test_sounds.h5",
               classes_data_file="../data/classes_sounds.h5"):
     with h5py.File(train_data_file, 'r') as hf:
         x_train_orig = hf["train_set_x"][:]
@@ -148,10 +145,33 @@ def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
         yield (mini_batch_X, mini_batch_Y)
 
 
+def prepare_sample(h5_inp_folder, output_folder, train_sample_size=1000, test_sample_size=60):
+    """
+    Samples a h5py file generated from a audio vector train data set
+    :param h5_inp_folder: folder containing train_sounds, test_sounds and classes_sounds vectorized h5 files
+    :param output_folder: directory where to save the sampled files
+    :param train_sample_size: number of examples as training data in the output
+    :param test_sample_size: number of examples as test data in the output
+    :return:
+    """
+    train_data_file = os.path.join(h5_inp_folder, 'train_sounds.h5')
+    test_data_file = os.path.join(h5_inp_folder, 'test_sounds.h5')
+    classes_data_file = os.path.join(h5_inp_folder, 'classes_sounds.h5')
+    X, Y, _, _, classes = load_data(train_data_file, test_data_file, classes_data_file)
+    print("%s: Vectorized training data" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+    X_mini, y_mini = next(random_mini_batches(X, Y, train_sample_size + test_sample_size))  # fetch the first batch
+    test_size = test_sample_size / (test_sample_size + train_sample_size)
+    X_train, X_test, y_train, y_test = train_test_split(X_mini, y_mini, test_size=test_size, random_state=42)
+    save_data(X_train, X_test, y_train, y_test, classes, output_folder)
+
+
 def main():
-    # X_train, X_test, y_train, y_test, classes = prepare_data("../data/train/audio")
-    # save_data(X_train, X_test, y_train, y_test, classes,  "../data")
-    x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
+    # X, Y, classes = vectorize_train_data("../data/train/audio")
+    # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    # print("Finished splitting all data to train-test")
+    # # save_data(X_train, X_test, y_train, y_test, classes,  "../data")
+    # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
+    prepare_sample("../data/vectorized/90_10_split_from_train", "../data/vectorized/sample")
 
 
 if __name__ == '__main__':
