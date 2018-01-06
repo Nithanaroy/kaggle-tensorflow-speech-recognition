@@ -84,8 +84,8 @@ def save_data(X_train, X_test, y_train, y_test, classes, data_folder):
     print("Saved the data to %s, %s and %s" % (train_data_file, test_data_file, classes_data_file))
 
 
-def load_data(train_data_file="../data/train_sounds.h5", test_data_file="../data/test_sounds.h5",
-              classes_data_file="../data/classes_sounds.h5"):
+def load_data(train_data_file="../data/vectorized/sample/train_sounds.h5", test_data_file="../data/vectorized/sample/test_sounds.h5",
+              classes_data_file="../data/vectorized/sample/classes_sounds.h5"):
     with h5py.File(train_data_file, 'r') as hf:
         x_train_orig = hf["train_set_x"][:]
         y_train_orig = hf["train_set_y"][:]
@@ -160,7 +160,7 @@ def prepare_sample(h5_inp_folder, output_folder, train_sample_size=1000, test_sa
     X, Y, _, _, classes = load_data(train_data_file, test_data_file, classes_data_file)
     print("%s: Vectorized training data" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
     X_mini, y_mini = next(random_mini_batches(X, Y, train_sample_size + test_sample_size))  # fetch the first batch
-    test_size = test_sample_size / (test_sample_size + train_sample_size)
+    test_size = float(test_sample_size) / (test_sample_size + train_sample_size)
     X_train, X_test, y_train, y_test = train_test_split(X_mini, y_mini, test_size=test_size, random_state=42)
     save_data(X_train, X_test, y_train, y_test, classes, output_folder)
 
