@@ -1,0 +1,4 @@
+model_checkpoint_path: "l2_10_51e-100e_256b.ckpt"
+all_model_checkpoint_paths: "trained_model.ckpt"
+all_model_checkpoint_paths: "l2_10_50e_256b.ckpt"
+all_model_checkpoint_paths: "l2_10_51e-100e_256b.ckpt"

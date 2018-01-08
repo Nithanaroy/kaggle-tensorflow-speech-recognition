@@ -1,0 +1,2 @@
+model_checkpoint_path: "l2_10_300e_256b_l2-reg-0.01_alpha-0.001.ckpt"
+all_model_checkpoint_paths: "l2_10_300e_256b_l2-reg-0.01_alpha-0.001.ckpt"
