@@ -9,6 +9,9 @@ import numpy as np
 import h5py
 import gc
 from datetime import datetime
+import scipy.io.wavfile
+#from scipy.fftpack import dct
+#import matplotlib.pyplot as plt
 
 AUDIO_PADDING = 0  # padding value for audio vectors to make them of equal length
 
@@ -68,6 +71,35 @@ def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
 
     return X, Y, classes
 
+def get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",)):
+    # Params
+    preemphasis_alpha = 0.97
+    frame_len_in_secs = 0.02
+    frame_step_in_secs = 0.01
+    NFFT = 512
+    nFilts = 40
+    n_leftFrames = 23
+    n_rightFrames = 8
+    max_nframes = 98
+    nclasses = 30
+    classes = []
+    #class_count = 0
+    #sample_count = 0
+    X = []
+    y = []
+    for token_folder in os.scandir(input_folder_path):
+        if token_folder.name in skip_folders or not token_folder.is_dir():
+            continue
+        classes.append(token_folder.name)
+        for audio_file in os.scandir(token_folder.path):
+            audio_file = os.path.abspath(audio_file.path)
+            if not (audio_file).endswith('.wav'):
+                continue
+            X.append(extract_mel_filter_bank_features(audio_file, preemphasis_alpha, frame_len_in_secs, frame_step_in_secs, NFFT, nFilts, n_leftFrames, n_rightFrames, max_nframes))
+            y.append(token_folder.name)
+            #sample_count += 1
+        #class_count += 1
+    return X,y,classes
 
 def save_data(X_train, X_test, y_train, y_test, classes, data_folder):
     train_data_file = os.path.join(data_folder, 'train_sounds.h5')
@@ -144,6 +176,75 @@ def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
         mini_batch_Y = shuffled_Y[num_complete_minibatches * mini_batch_size: m, :]
         yield (mini_batch_X, mini_batch_Y)
 
+def extract_mel_filter_bank_features(wavfile,preemphasis_alpha,frame_len_in_secs,frame_step_in_secs,NFFT,nFilts,n_leftFrames,n_rightFrames,max_nframes):
+    """
+    
+    :param: wavfile,preemphasis_alpha,frame_len_in_secs,frame_step_in_secs,NFFT,nFilts,n_leftFrames,n_rightFrames,max_nframes
+    :return: mel_filter_bank_features
+    """
+
+    # Read the signal
+    fs, signal = scipy.io.wavfile.read(wavfile)
+    signal = signal / float(2 ** 15)
+
+    # PreEmphasis
+    preemaphasized_signal = np.append(signal[0], signal[1:] - preemphasis_alpha * signal[:-1])
+
+    # Framing
+    frame_len_in_samples = int(round(frame_len_in_secs * fs))
+    frame_step_in_samples = int(round(frame_step_in_secs * fs))
+    signal_len = preemaphasized_signal.size
+    nFrames = int(np.ceil((signal_len - frame_len_in_samples) / frame_step_in_samples))
+    n_zero_padding = nFrames * frame_step_in_samples + frame_len_in_samples - signal_len
+    preemaphasized_signal_padded = np.pad(signal, (0, n_zero_padding), 'constant', constant_values=0)
+    indices = np.tile(np.arange(0, frame_len_in_samples), (nFrames, 1)) + np.tile(
+        np.arange(0, nFrames * frame_step_in_samples, frame_step_in_samples), (frame_len_in_samples, 1)).T
+    frames = preemaphasized_signal_padded[indices.astype(np.int32, copy=False)]
+
+    # Windowing
+    frames *= np.hamming(frame_len_in_samples)
+
+    # FFT and Power Spectrum
+    mag_frames = np.abs(np.fft.rfft(frames, NFFT))
+    power_spect_frames = (1.0 / NFFT) * (mag_frames ** 2)
+
+    # Filter Banks
+    mel_low = 0
+    mel_high = 2595.0 * np.log10(1.0 + fs / (2 * 700.0))
+    mel_bins = np.linspace(mel_low, mel_high, nFilts + 2)
+    f_bins = 700.0 * (10 ** (mel_bins / 2595.0) - 1)
+    f_ind = np.floor((NFFT + 1) * f_bins / fs)
+    f_actual_bins = np.linspace(0, fs, NFFT)
+    f_actual_bins = f_actual_bins[range(int(NFFT / 2.0 + 1))]
+
+    filter_bank_coeffs = np.zeros((nFilts, int(NFFT / 2.0 + 1)))
+
+    for i in range(1, nFilts + 1):
+        f_prev_ind = int(f_ind[i - 1])
+        f_next_ind = int(f_ind[i + 1])
+        f_cur_ind = int(f_ind[i])
+
+        filter_bank_coeffs[i - 1, f_prev_ind:f_cur_ind] = (np.arange(f_prev_ind, f_cur_ind) - f_ind[i - 1]) / (
+        f_ind[i] - f_ind[i - 1])
+        filter_bank_coeffs[i - 1, f_cur_ind:f_next_ind] = (f_ind[i + 1] - np.arange(f_cur_ind, f_next_ind)) / (
+        f_ind[i + 1] - f_ind[i])
+
+
+    # Filter Bank Features
+    filter_bank_features = np.dot(power_spect_frames, filter_bank_coeffs.T)
+    filter_bank_features = np.where(filter_bank_features == 0, np.finfo(float).eps, filter_bank_features)
+    filter_bank_features = 20 * np.log10(filter_bank_features)
+    filter_bank_features_normalized = filter_bank_features - np.mean(filter_bank_features, axis=0)
+
+    # Filter Bank Features with adjacent frames
+    filter_bank_features_normalized_final = np.zeros(
+        (max_nframes - n_leftFrames - n_rightFrames, nFilts * (n_leftFrames + n_rightFrames + 1)))
+    for i in np.arange(n_leftFrames, nFrames - n_rightFrames):
+        filter_bank_features_normalized_final[i:] = filter_bank_features_normalized[
+                                                    i - n_leftFrames:i + n_rightFrames + 1, :].flatten()
+
+    return filter_bank_features_normalized_final
+
 
 def prepare_sample(h5_inp_folder, output_folder, train_sample_size=1000, test_sample_size=60):
     """
@@ -167,12 +268,7 @@ def prepare_sample(h5_inp_folder, output_folder, train_sample_size=1000, test_sa
 
 def main():
     # X, Y, classes = vectorize_train_data("../data/train/audio")
-    # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
-    # print("Finished splitting all data to train-test")
-    # # save_data(X_train, X_test, y_train, y_test, classes,  "../data")
     # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
-    prepare_sample("../data/vectorized/90_10_split_from_train", "../data/vectorized/sample")
-
 
 if __name__ == '__main__':
     main()
