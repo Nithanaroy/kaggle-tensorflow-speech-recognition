@@ -269,6 +269,7 @@ def prepare_sample(h5_inp_folder, output_folder, train_sample_size=1000, test_sa
 def main():
     # X, Y, classes = vectorize_train_data("../data/train/audio")
     # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
+    pass
 
 if __name__ == '__main__':
     main()
