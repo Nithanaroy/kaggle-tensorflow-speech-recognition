@@ -10,8 +10,9 @@ import h5py
 import gc
 from datetime import datetime
 import scipy.io.wavfile
-#from scipy.fftpack import dct
-#import matplotlib.pyplot as plt
+
+# from scipy.fftpack import dct
+# import matplotlib.pyplot as plt
 
 AUDIO_PADDING = 0  # padding value for audio vectors to make them of equal length
 
@@ -38,7 +39,16 @@ def load_wav_file(filename):
 
 def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
     """
-    This requires huge memory as we load the entire dataset into memory and process it
+    Transforms .wav files to numpy vectors
+    Since all .wav files may not be of the same length, smaller vectors are right padded with zeros
+    X.shape = (# .wav files, largest audio vector)
+    y.shape = (# .wav files, )
+    classes.shape = (# number of classes, )
+
+    Note: This function requires huge memory as we load the entire dataset into memory and process it
+    :param inp_folder_path: path to .wav file data. The folder structure should be as explained in the Organization section in https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/data
+    :param skip_folders: folders to skip while looking for .wav files in the input folder
+    :return: numpy vectors X, Y, classes
     """
     x_raw_audio = []
     y_raw = []
@@ -71,6 +81,7 @@ def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
 
     return X, Y, classes
 
+
 def get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",)):
     # Params
     preemphasis_alpha = 0.97
@@ -83,8 +94,8 @@ def get_features_from_all_files(input_folder_path, skip_folders=("_background_no
     max_nframes = 98
     nclasses = 30
     classes = []
-    #class_count = 0
-    #sample_count = 0
+    # class_count = 0
+    # sample_count = 0
     X = []
     y = []
     for token_folder in os.scandir(input_folder_path):
@@ -95,16 +106,29 @@ def get_features_from_all_files(input_folder_path, skip_folders=("_background_no
             audio_file = os.path.abspath(audio_file.path)
             if not (audio_file).endswith('.wav'):
                 continue
-            X.append(extract_mel_filter_bank_features(audio_file, preemphasis_alpha, frame_len_in_secs, frame_step_in_secs, NFFT, nFilts, n_leftFrames, n_rightFrames, max_nframes))
+            X.append(
+                extract_mel_filter_bank_features(audio_file, preemphasis_alpha, frame_len_in_secs, frame_step_in_secs,
+                                                 NFFT, nFilts, n_leftFrames, n_rightFrames, max_nframes))
             y.append(token_folder.name)
-            #sample_count += 1
-        #class_count += 1
-    return X,y,classes
+            # sample_count += 1
+        # class_count += 1
+    return X, y, classes
 
-def save_data(X_train, X_test, y_train, y_test, classes, data_folder):
-    train_data_file = os.path.join(data_folder, 'train_sounds.h5')
-    test_data_file = os.path.join(data_folder, 'test_sounds.h5')
-    classes_data_file = os.path.join(data_folder, 'classes_sounds.h5')
+
+def save_data(X_train, X_test, y_train, y_test, classes, output_folder):
+    """
+    Persists the numpy vectors to disk
+    :param X_train: numpy vector X for training
+    :param X_test: numpy vector X for testing
+    :param y_train: numpy vector y for training
+    :param y_test: numpy vector y for testing
+    :param classes: numpy vector having a list of all classes
+    :param output_folder: location where to save the vectors
+    :return:
+    """
+    train_data_file = os.path.join(output_folder, 'train_sounds.h5')
+    test_data_file = os.path.join(output_folder, 'test_sounds.h5')
+    classes_data_file = os.path.join(output_folder, 'classes_sounds.h5')
     with h5py.File(train_data_file, 'w') as hf:
         hf.create_dataset("train_set_x", data=X_train)
         hf.create_dataset("train_set_y", data=y_train)
@@ -116,8 +140,16 @@ def save_data(X_train, X_test, y_train, y_test, classes, data_folder):
     print("Saved the data to %s, %s and %s" % (train_data_file, test_data_file, classes_data_file))
 
 
-def load_data(train_data_file="../data/vectorized/sample/train_sounds.h5", test_data_file="../data/vectorized/sample/test_sounds.h5",
+def load_data(train_data_file="../data/vectorized/sample/train_sounds.h5",
+              test_data_file="../data/vectorized/sample/test_sounds.h5",
               classes_data_file="../data/vectorized/sample/classes_sounds.h5"):
+    """
+    Load vectors from disk and do initial pre-processing
+    :param train_data_file: location of train h5 file
+    :param test_data_file: location of test h5 file
+    :param classes_data_file: location of classes h5 file
+    :return: numpy vectors X_train, Y_train, X_test, Y_test, classes
+    """
     with h5py.File(train_data_file, 'r') as hf:
         x_train_orig = hf["train_set_x"][:]
         y_train_orig = hf["train_set_y"][:]
@@ -137,6 +169,12 @@ def load_data(train_data_file="../data/vectorized/sample/train_sounds.h5", test_
 
 
 def convert_to_one_hot(Y, classes):
+    """
+    Converts numpy vector Y to one hot encoding for training
+    :param Y: numpy Y vector of shape (class string, 1)
+    :param classes: list of all possible classes
+    :return: numpy vector of shape (Y.shape[0], len(classes))
+    """
     return label_binarize(Y, classes=classes)
 
 
@@ -176,7 +214,9 @@ def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
         mini_batch_Y = shuffled_Y[num_complete_minibatches * mini_batch_size: m, :]
         yield (mini_batch_X, mini_batch_Y)
 
-def extract_mel_filter_bank_features(wavfile,preemphasis_alpha,frame_len_in_secs,frame_step_in_secs,NFFT,nFilts,n_leftFrames,n_rightFrames,max_nframes):
+
+def extract_mel_filter_bank_features(wavfile, preemphasis_alpha, frame_len_in_secs, frame_step_in_secs, NFFT, nFilts,
+                                     n_leftFrames, n_rightFrames, max_nframes):
     """
     
     :param: wavfile,preemphasis_alpha,frame_len_in_secs,frame_step_in_secs,NFFT,nFilts,n_leftFrames,n_rightFrames,max_nframes
@@ -225,10 +265,9 @@ def extract_mel_filter_bank_features(wavfile,preemphasis_alpha,frame_len_in_secs
         f_cur_ind = int(f_ind[i])
 
         filter_bank_coeffs[i - 1, f_prev_ind:f_cur_ind] = (np.arange(f_prev_ind, f_cur_ind) - f_ind[i - 1]) / (
-        f_ind[i] - f_ind[i - 1])
+                f_ind[i] - f_ind[i - 1])
         filter_bank_coeffs[i - 1, f_cur_ind:f_next_ind] = (f_ind[i + 1] - np.arange(f_cur_ind, f_next_ind)) / (
-        f_ind[i + 1] - f_ind[i])
-
+                f_ind[i + 1] - f_ind[i])
 
     # Filter Bank Features
     filter_bank_features = np.dot(power_spect_frames, filter_bank_coeffs.T)
@@ -268,8 +307,11 @@ def prepare_sample(h5_inp_folder, output_folder, train_sample_size=1000, test_sa
 
 def main():
     # X, Y, classes = vectorize_train_data("../data/train/audio")
+    # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train/"):
     # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
     pass
+
 
 if __name__ == '__main__':
     main()
