@@ -160,8 +160,31 @@ def load_data(train_data_file="../data/vectorized/sample/train_sounds.h5",
         classes = hf["classes"][:]
 
     # re-shape to perform convolution operations
+
     x_train_orig = x_train_orig.reshape(x_train_orig.shape[0], x_train_orig.shape[1], 1, 1)
     x_test_orig = x_test_orig.reshape(x_test_orig.shape[0], x_test_orig.shape[1], 1, 1)
+    y_train_orig = y_train_orig.reshape(y_train_orig.shape[0], 1)
+    y_test_orig = y_test_orig.reshape(y_test_orig.shape[0], 1)
+
+    return x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes
+
+
+def load_data_mfcc(train_data_file="../data/vectorized/sample/train_sounds.h5",
+              test_data_file="../data/vectorized/sample/test_sounds.h5",
+              classes_data_file="../data/vectorized/sample/classes_sounds.h5"):
+    with h5py.File(train_data_file, 'r') as hf:
+        x_train_orig = hf["train_set_x"][:]
+        y_train_orig = hf["train_set_y"][:]
+    with h5py.File(test_data_file, 'r') as hf:
+        x_test_orig = hf["test_set_x"][:]
+        y_test_orig = hf["test_set_y"][:]
+    with h5py.File(classes_data_file, 'r') as hf:
+        classes = hf["classes"][:]
+
+    # re-shape to perform convolution operations
+
+    x_train_orig = x_train_orig.reshape(x_train_orig.shape[0], x_train_orig.shape[1], x_train_orig.shape[2], 1)
+    x_test_orig = x_test_orig.reshape(x_test_orig.shape[0], x_test_orig.shape[1], x_test_orig.shape[2], 1)
     y_train_orig = y_train_orig.reshape(y_train_orig.shape[0], 1)
     y_test_orig = y_test_orig.reshape(y_test_orig.shape[0], 1)
 
@@ -278,9 +301,11 @@ def extract_mel_filter_bank_features(wavfile, preemphasis_alpha, frame_len_in_se
     # Filter Bank Features with adjacent frames
     filter_bank_features_normalized_final = np.zeros(
         (max_nframes - n_leftFrames - n_rightFrames, nFilts * (n_leftFrames + n_rightFrames + 1)))
+    count = 0
     for i in np.arange(n_leftFrames, nFrames - n_rightFrames):
-        filter_bank_features_normalized_final[i:] = filter_bank_features_normalized[
+        filter_bank_features_normalized_final[count:] = filter_bank_features_normalized[
                                                     i - n_leftFrames:i + n_rightFrames + 1, :].flatten()
+        count += 1
 
     return filter_bank_features_normalized_final
 
@@ -310,8 +335,14 @@ def main():
     # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
     # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train/"):
     # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
-    pass
 
+    input_folder_path = '/Users/ajakkam/Documents/Work/Anil/Practice/Kaggle/train_sample/audio/'
+    X,Y,classes = get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",))
+    Y = np.array(Y, dtype='|S9')  # to binary strings to persist on disk
+    classes = np.array(classes, dtype='|S9')  # to binary strings to persist on disk
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    print("Finished splitting all data to train-test")
+    save_data(X_train, X_test, y_train, y_test, classes, "/Users/ajakkam/Documents/Work/Anil/Practice/Kaggle/Project_speech/kaggle-tensorflow-speech-recognition/data")
 
 if __name__ == '__main__':
     main()
