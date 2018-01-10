@@ -11,7 +11,7 @@
 
 
 import numpy as np
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.python.framework import ops
 from utils import *
@@ -20,7 +20,7 @@ from time import time
 from tensorflow.python.client import timeline # for profiling
 from math import ceil
 
-get_ipython().magic('matplotlib notebook')
+#get_ipython().magic('matplotlib notebook')
 np.random.seed(1)
 
 
@@ -29,7 +29,7 @@ np.random.seed(1)
 # In[2]:
 
 
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data("../data/vectorized/90_10_split_from_train/train_sounds.h5", "../data/vectorized/90_10_split_from_train/test_sounds.h5", "../data/vectorized/90_10_split_from_train/classes_sounds.h5")
+X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5", "../data/test_sounds.h5", "../data/classes_sounds.h5")
 # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data() # sample data
 
 
@@ -48,6 +48,7 @@ print ("X_train shape: " + str(X_train.shape))
 print ("Y_train shape: " + str(Y_train.shape))
 print ("X_test shape: " + str(X_test.shape))
 print ("Y_test shape: " + str(Y_test.shape))
+print ("classes shape: " + str(classes.shape))
 
 
 # ## Create input placeholders
@@ -57,7 +58,7 @@ print ("Y_test shape: " + str(Y_test.shape))
 # In[4]:
 
 
-def create_placeholders(n_l, n_y):
+def create_placeholders(n_l, n_y, n_h):
     """
     Creates the placeholders for the tensorflow session.
 
@@ -69,7 +70,7 @@ def create_placeholders(n_l, n_y):
     X -- placeholder for the data input, of shape [None, n_l] and dtype "float"
     Y -- placeholder for the input labels, of shape [None, n_y] and dtype "float"
     """
-    X = tf.placeholder(tf.float32, shape=(None, n_l, 1, 1), name="X")
+    X = tf.placeholder(tf.float32, shape=(None, n_l, n_h, 1), name="X")
     Y = tf.placeholder(tf.float32, shape=(None, n_y), name="Y")
 
     return X, Y
@@ -262,50 +263,50 @@ def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size = 64, percent_data
 
     return train_accuracy
 
-
-# ### Plot Helper for (cost, test accuracy, train accuracy) VS (# iterations)
-
-# In[13]:
-
-
-def plot_cost_test_train(num_epochs, costs, test_accs, title = ""):
-    fig, ax1 = plt.subplots()
-    t = np.arange(num_epochs)
-    ax1.plot(t, costs, 'b-')
-    ax1.set_xlabel('iterations (per tens)')
-    # Make the y-axis label, ticks and tick labels match the line color.
-    ax1.set_ylabel('train cost', color='b')
-    ax1.tick_params('y', colors='b')
-
-#     ax2 = ax1.twinx()
-#     ax2.plot(t, training_accs, 'r-')
-#     ax2.set_ylabel('train accuracy', color='r')
-#     ax2.tick_params('y', colors='r')
-    
-    ax3 = ax1.twinx()
-    ax3.plot(t, test_accs, 'm-')
-    ax3.set_ylabel('test cost', color='m')
-    ax3.tick_params('y', colors='m')
-#     ax3.spines['right'].set_position(('axes', 1.2))
-
-    fig.tight_layout()
-#     fig.subplots_adjust(right=0.75) # add space on the right for y3 axis
-    plt.title(title)
-    plt.show()
-
-
-# In[23]:
-
-
-def plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, title = ""):
-    num_points = len(training_costs)
-    t = np.arange(num_points) * (num_epochs / num_points)
-    
-    plt.plot(t, training_costs, color="b", linestyle="-")
-    plt.plot(t, testing_costs, color="m", linestyle="-")
-    
-    plt.title(title)
-    plt.show()
+#
+# # ### Plot Helper for (cost, test accuracy, train accuracy) VS (# iterations)
+#
+# # In[13]:
+#
+#
+# def plot_cost_test_train(num_epochs, costs, test_accs, title = ""):
+#     fig, ax1 = plt.subplots()
+#     t = np.arange(num_epochs)
+#     ax1.plot(t, costs, 'b-')
+#     ax1.set_xlabel('iterations (per tens)')
+#     # Make the y-axis label, ticks and tick labels match the line color.
+#     ax1.set_ylabel('train cost', color='b')
+#     ax1.tick_params('y', colors='b')
+#
+# #     ax2 = ax1.twinx()
+# #     ax2.plot(t, training_accs, 'r-')
+# #     ax2.set_ylabel('train accuracy', color='r')
+# #     ax2.tick_params('y', colors='r')
+#
+#     ax3 = ax1.twinx()
+#     ax3.plot(t, test_accs, 'm-')
+#     ax3.set_ylabel('test cost', color='m')
+#     ax3.tick_params('y', colors='m')
+# #     ax3.spines['right'].set_position(('axes', 1.2))
+#
+#     fig.tight_layout()
+# #     fig.subplots_adjust(right=0.75) # add space on the right for y3 axis
+#     plt.title(title)
+#     plt.show()
+#
+#
+# # In[23]:
+#
+#
+# def plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, title = ""):
+#     num_points = len(training_costs)
+#     t = np.arange(num_points) * (num_epochs / num_points)
+#
+#     plt.plot(t, training_costs, color="b", linestyle="-")
+#     plt.plot(t, testing_costs, color="m", linestyle="-")
+#
+#     plt.title(title)
+#     plt.show()
 
 
 # ## Model
@@ -361,10 +362,10 @@ def create_model(X_train, Y_train, learning_rate):
     """
 
     tf.set_random_seed(1) # to keep results consistent (tensorflow seed)
-    (m, n_l, _, __) = X_train.shape
+    (m, n_l, n_h, __) = X_train.shape
     n_y = Y_train.shape[1]
 
-    X, Y = create_placeholders(n_l, n_y)
+    X, Y = create_placeholders(n_l, n_y, n_h)
     Z3 = forward_propagation(X)
     cost = compute_cost(Z3, Y)
     
@@ -387,7 +388,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
     
     seed = 3 # to keep results consistent (numpy seed)
     m = X_train.shape[0]
-    num_minibatches = int(m / minibatch_size) # number of minibatches of size minibatch_size in the train set
+    num_minibatches = int(np.ceil(m / float(minibatch_size))) # number of minibatches of size minibatch_size in the train set
     training_costs = []
     testing_costs = []
     
@@ -413,7 +414,8 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
         # Print the cost every # epochs
         if print_cost == True and epoch % 10 == 0:
             training_costs.append(minibatch_cost)
-            temp_cost = sess.run(cost, feed_dict = {X: X_test, Y: Y_test})
+            temp_cost = 1
+            #temp_cost = sess.run(cost, feed_dict = {X: X_test, Y: Y_test})
             testing_costs.append(temp_cost)
             print("%s\t%i\t%f\t%f" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, minibatch_cost, temp_cost))
             
@@ -424,7 +426,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
             testing_writer.add_summary(testing_summary, epoch)
         
     # plot_cost_test_train(len(training_costs), training_costs, testing_costs, "Learning rate = %s" % learning_rate)
-    plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, "Learning rate = %s" % learning_rate)
+    #plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, "Learning rate = %s" % learning_rate)
     return training_costs, testing_costs
 
 
