@@ -1,4 +1,3 @@
-
 # coding: utf-8
 
 # # Audio Recognition using Tensorflow
@@ -7,9 +6,6 @@
 
 # ## Import necessary modules
 
-# In[1]:
-
-
 import numpy as np
 # import matplotlib.pyplot as plt
 import tensorflow as tf
@@ -17,26 +13,21 @@ from tensorflow.python.framework import ops
 from utils import *
 from datetime import datetime
 from time import time
-from tensorflow.python.client import timeline # for profiling
+from tensorflow.python.client import timeline  # for profiling
 from math import ceil
 
-#get_ipython().magic('matplotlib notebook')
+# get_ipython().magic('matplotlib notebook')
 np.random.seed(1)
-
 
 # ## Import the dataset
 
-# In[2]:
-
-
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5", "../data/test_sounds.h5", "../data/classes_sounds.h5")
+# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5", "../data/test_sounds.h5", "../data/classes_sounds.h5")
 # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data() # sample data
-
+X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/vectorized/mfcc/train_sounds.h5",
+                                                                          "../data/vectorized/mfcc/test_sounds.h5",
+                                                                          "../data/vectorized/mfcc/classes_sounds.h5")  # mfcc data
 
 # ## Explore the dataset
-
-# In[3]:
-
 
 X_train = X_train_orig
 X_test = X_test_orig
@@ -55,28 +46,23 @@ print ("classes shape: " + str(classes.shape))
 # 
 # Tensorflow placeholders for X and Y. These will be dynamically set during batch G.D at runtime
 
-# In[4]:
-
-
-def create_placeholders(n_l, n_y, n_h):
+def create_placeholders(n_l, n_h, n_y):
     """
     Creates the placeholders for the tensorflow session.
 
     Arguments:
-    n_l -- scalar, length of the audio vector
+    n_l -- scalar, first dimension of a audio vector
+    n_h -- scalar, second dimension of a audio vector
     n_y -- scalar, number of classes
 
     Returns:
-    X -- placeholder for the data input, of shape [None, n_l] and dtype "float"
+    X -- placeholder for the data input, of shape [None, n_l, n_h, 1] and dtype "float"
     Y -- placeholder for the input labels, of shape [None, n_y] and dtype "float"
     """
     X = tf.placeholder(tf.float32, shape=(None, n_l, n_h, 1), name="X")
     Y = tf.placeholder(tf.float32, shape=(None, n_y), name="Y")
 
     return X, Y
-
-
-# In[5]:
 
 
 # X, Y = create_placeholders(500, 20)
@@ -87,9 +73,6 @@ def create_placeholders(n_l, n_y, n_h):
 # ## Initialize Parameters
 # 
 # With tensorflow we only need to initialize parameters for Conv layers. Fully connected layers' paramaters are completed handled by the framework.
-
-# In[6]:
-
 
 def initialize_parameters():
     """
@@ -102,15 +85,12 @@ def initialize_parameters():
 
     tf.set_random_seed(1)
 
-    W1 = tf.get_variable("W1", [4,1,1,8], initializer=tf.contrib.layers.xavier_initializer(seed = 0))
-    W2 = tf.get_variable("W2", [2,1,8,16], initializer=tf.contrib.layers.xavier_initializer(seed = 0))
+    W1 = tf.get_variable("W1", [4, 1, 1, 8], initializer=tf.contrib.layers.xavier_initializer(seed=0))
+    W2 = tf.get_variable("W2", [2, 1, 8, 16], initializer=tf.contrib.layers.xavier_initializer(seed=0))
 
     parameters = {"W1": W1, "W2": W2}
 
     return parameters
-
-
-# In[7]:
 
 
 # tf.reset_default_graph()
@@ -136,9 +116,6 @@ def initialize_parameters():
 #     - Flatten the previous output.
 #     - FULLYCONNECTED (FC) layer: outputs 30 classes one for each audio utterance
 
-# In[8]:
-
-
 def forward_propagation(X):
     """
     Implements the forward propagation for the model:
@@ -153,8 +130,8 @@ def forward_propagation(X):
     """
 
     # Retrieve the parameters from the dictionary "parameters"
-#     W1 = parameters['W1']
-#     W2 = parameters['W2']
+    #     W1 = parameters['W1']
+    #     W2 = parameters['W2']
     regularizer1 = tf.contrib.layers.l2_regularizer(scale=0.001)
     regularizer2 = tf.contrib.layers.l2_regularizer(scale=0.01)
     regularizer3 = tf.contrib.layers.l2_regularizer(scale=0.1)
@@ -162,20 +139,17 @@ def forward_propagation(X):
     regularizer5 = tf.contrib.layers.l2_regularizer(scale=10.0)
     regularizer6 = None
 
-    Z1 = tf.layers.conv2d(X, 64, (20,8), strides = [1,1], padding = 'SAME', kernel_regularizer = regularizer6, name="z1")
+    Z1 = tf.layers.conv2d(X, 64, (20, 8), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer6, name="z1")
     A1 = tf.nn.relu(Z1, name="a1")
-    P1 = tf.nn.max_pool(A1, ksize = [1,1,3,1], strides = [1,2,1,1], padding = 'SAME', name="p1")
-    Z2 = tf.layers.conv2d(P1, 64, (10, 4), strides = [1,1], padding = 'SAME', kernel_regularizer = regularizer6, name="z2")
+    P1 = tf.nn.max_pool(A1, ksize=[1, 1, 3, 1], strides=[1, 2, 1, 1], padding='SAME', name="p1")
+    Z2 = tf.layers.conv2d(P1, 64, (10, 4), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer6, name="z2")
     A2 = tf.nn.relu(Z2, name="a2")
-    P2 = tf.nn.max_pool(A2, ksize = [1,1,1,1], strides = [1,1,1,1], padding = 'SAME', name="p2")
+    P2 = tf.nn.max_pool(A2, ksize=[1, 1, 1, 1], strides=[1, 1, 1, 1], padding='SAME', name="p2")
     P3 = tf.contrib.layers.flatten(P2)
-    Z3 = tf.contrib.layers.fully_connected(P3, 128, activation_fn=None, weights_regularizer = regularizer6)
+    Z3 = tf.contrib.layers.fully_connected(P3, 128, activation_fn=None, weights_regularizer=regularizer6)
     A3 = tf.nn.relu(Z3, name="a3")
-    Z4 = tf.contrib.layers.fully_connected(A3, 30, activation_fn=None, weights_regularizer = regularizer6)
+    Z4 = tf.contrib.layers.fully_connected(A3, 30, activation_fn=None, weights_regularizer=regularizer6)
     return Z4
-
-
-# In[9]:
 
 
 # tf.reset_default_graph()
@@ -194,9 +168,6 @@ def forward_propagation(X):
 # 
 # Using the last layer Z3, compute softmax and J
 
-# In[10]:
-
-
 def compute_cost(Z3, Y):
     """
     Computes the cost
@@ -209,12 +180,9 @@ def compute_cost(Z3, Y):
     cost - Tensor of the cost function
     """
 
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits = Z3, labels = Y, name="L"), name="J")
+    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=Z3, labels=Y, name="L"), name="J")
 
     return cost
-
-
-# In[11]:
 
 
 # tf.reset_default_graph()
@@ -232,17 +200,14 @@ def compute_cost(Z3, Y):
 
 # ## Define Model Accuracy
 
-# In[12]:
-
-
-def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size = 64, percent_data = 100, print_progress = True):
+def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=64, percent_data=100, print_progress=True):
     """
     percent_data-- approximate max % amount of data to consider while computing accuracy
     """
     predict_op = tf.argmax(Z3, 1)
     correct_prediction = tf.equal(predict_op, tf.argmax(Y, 1))
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
-    
+
     num_minibatches = 0
     acc_accuracy = 0
     total_minibatches = ceil(X_train.shape[0] / float(minibatch_size))
@@ -252,9 +217,10 @@ def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size = 64, percent_data
         (minibatch_X, minibatch_Y) = minibatch
         acc_accuracy += accuracy.eval({X: minibatch_X, Y: minibatch_Y})
         num_minibatches += 1
-        
+
         if print_progress and num_minibatches % 25 == 0:
-            print("%s: Accuracy after %ith batch: %f" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), num_minibatches, acc_accuracy / num_minibatches))
+            print("%s: Accuracy after %ith batch: %f" % (
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'), num_minibatches, acc_accuracy / num_minibatches))
         if num_minibatches >= max_num_minibatches:
             break
 
@@ -263,11 +229,11 @@ def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size = 64, percent_data
 
     return train_accuracy
 
+
 #
 # # ### Plot Helper for (cost, test accuracy, train accuracy) VS (# iterations)
 #
-# # In[13]:
-#
+# #
 #
 # def plot_cost_test_train(num_epochs, costs, test_accs, title = ""):
 #     fig, ax1 = plt.subplots()
@@ -295,8 +261,7 @@ def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size = 64, percent_data
 #     plt.show()
 #
 #
-# # In[23]:
-#
+# #
 #
 # def plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, title = ""):
 #     num_points = len(training_costs)
@@ -315,30 +280,20 @@ def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size = 64, percent_data
 
 # ### Start a session
 
-# In[15]:
-
-
-tf.reset_default_graph() # to be able to rerun the model without overwriting tf variables
-
-config = tf.ConfigProto(device_count = {'GPU': 0})
+tf.reset_default_graph()  # to be able to rerun the model without overwriting tf variables
 
 # Start an interactive session
-sess = tf.InteractiveSession(config=config)
-
+# config = tf.ConfigProto(device_count={'GPU': 0})
+# sess = tf.InteractiveSession(config=config)
+sess = tf.InteractiveSession()
 
 # ### Profiling
-
-# In[16]:
-
 
 options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
 run_metadata = tf.RunMetadata()
 
 
 # ### Tensorboard Static Settings
-
-# In[17]:
-
 
 def create_model(X_train, Y_train, learning_rate):
     """
@@ -361,17 +316,17 @@ def create_model(X_train, Y_train, learning_rate):
     parameters -- parameters learnt by the model. They can then be used to predict.
     """
 
-    tf.set_random_seed(1) # to keep results consistent (tensorflow seed)
-    (m, n_l, n_h, __) = X_train.shape
+    tf.set_random_seed(1)  # to keep results consistent (tensorflow seed)
+    m, n_l, n_h, _ = X_train.shape
     n_y = Y_train.shape[1]
 
-    X, Y = create_placeholders(n_l, n_y, n_h)
+    X, Y = create_placeholders(n_l, n_h, n_y)
     Z3 = forward_propagation(X)
     cost = compute_cost(Z3, Y)
-    
+
     # Backpropagation: Using AdamOptimizer to minimize the cost.
-    optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate, name="adam").minimize(cost, name="adam_minimize")
-    
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name="adam").minimize(cost, name="adam_minimize")
+
     # streaming_cost, streaming_cost_update = tf.contrib.metrics.streaming_mean(cost)
     # streaming_cost_scalar = tf.summary.scalar('streaming_cost', streaming_cost)
     # tf.summary.scalar('current_cost', cost)
@@ -380,25 +335,22 @@ def create_model(X_train, Y_train, learning_rate):
     return Z3, X, Y, cost, optimizer
 
 
-# In[18]:
-
-
-def run_model(X_train, Y_train, X_test, Y_test, X, Y, 
-              cost, optimizer, learning_rate = 0.011, minibatch_size = 64, num_epochs = 100, print_cost = True):
-    
-    seed = 3 # to keep results consistent (numpy seed)
+def run_model(X_train, Y_train, X_test, Y_test, X, Y,
+              cost, optimizer, learning_rate=0.011, minibatch_size=64, num_epochs=100, print_cost=True):
+    seed = 3  # to keep results consistent (numpy seed)
     m = X_train.shape[0]
-    num_minibatches = int(np.ceil(m / float(minibatch_size))) # number of minibatches of size minibatch_size in the train set
+    num_minibatches = int(
+        np.ceil(m / float(minibatch_size)))  # number of minibatches of size minibatch_size in the train set
     training_costs = []
     testing_costs = []
-    
+
     # Run the initialization
     init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
     sess.run(init)
-    
-    if print_cost == True: # print the header
+
+    if print_cost == True:  # print the header
         print("Timestamp\t\tEpoch\tTraining Cost\tTesting Cost")
-    
+
     # Do the training loop
     for epoch in range(num_epochs):
         minibatch_cost = 0.
@@ -408,101 +360,72 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
             (minibatch_X, minibatch_Y) = minibatch
             # IMPORTANT: The line that runs the graph on a minibatch.
             # Run the session to execute the optimizer and the cost, the feedict should contain a minibatch for (X,Y).
-            _, temp_cost = sess.run([optimizer, cost], feed_dict = {X: minibatch_X, Y: minibatch_Y}) 
+            _, temp_cost = sess.run([optimizer, cost], feed_dict={X: minibatch_X, Y: minibatch_Y})
             minibatch_cost += temp_cost / num_minibatches
 
         # Print the cost every # epochs
         if print_cost == True and epoch % 10 == 0:
             training_costs.append(minibatch_cost)
             temp_cost = 1
-            #temp_cost = sess.run(cost, feed_dict = {X: X_test, Y: Y_test})
+            # temp_cost = sess.run(cost, feed_dict = {X: X_test, Y: Y_test})
             testing_costs.append(temp_cost)
             print("%s\t%i\t%f\t%f" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, minibatch_cost, temp_cost))
-            
+
             # Write to tensorboard
             training_summary = tf.Summary(value=[tf.Summary.Value(tag="cost", simple_value=minibatch_cost)])
             testing_summary = tf.Summary(value=[tf.Summary.Value(tag="cost", simple_value=temp_cost)])
             training_writer.add_summary(training_summary, epoch)
             testing_writer.add_summary(testing_summary, epoch)
-        
+
     # plot_cost_test_train(len(training_costs), training_costs, testing_costs, "Learning rate = %s" % learning_rate)
-    #plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, "Learning rate = %s" % learning_rate)
+    # plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, "Learning rate = %s" % learning_rate)
     return training_costs, testing_costs
 
 
-# In[19]:
-
-
 learning_rate = 0.001
-Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate = learning_rate)
+num_epochs = 1
+minibatch_size = 16
+Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
 
-
-# In[20]:
-
-
-saver = tf.train.Saver() # create a saver for saving variables to disk
-
-
-# In[21]:
-
+saver = tf.train.Saver()  # create a saver for saving variables to disk
 
 # Define Tensor Board Settings after creating the graph
 
-RUN_NAME = "N: L2 lambda1 0.01, L2 lambda2 0.1, L2 lambda3 1, alp 0.001, ep 300"
+RUN_NAME = "N_MFCC_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
 training_writer = tf.summary.FileWriter("../logs/{}/training".format(RUN_NAME), sess.graph)
 testing_writer = tf.summary.FileWriter("../logs/{}/testing".format(RUN_NAME), sess.graph)
 
-
-# In[22]:
-
-
-training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y, 
-          cost, optimizer, learning_rate = learning_rate,
-          minibatch_size = 256, num_epochs = 300)
+training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y,
+                                          cost, optimizer, learning_rate=learning_rate,
+                                          minibatch_size=minibatch_size, num_epochs=num_epochs)
 
 
 # ### Save profiling data to disk
-
-# In[ ]:
-
 
 # Create the Timeline object, and write it to a json file
 def save_profiling_data():
     fetched_timeline = timeline.Timeline(run_metadata.step_stats)
     chrome_trace = fetched_timeline.generate_chrome_trace_format()
     time_id = int(time())
-    with open('../experiments/timeline_s_256b_120e_gpu0_l2_%s.json' % (time_id,), 'w') as f:
+    with open('../experiments/%s.json' % (RUN_NAME,), 'w') as f:
         f.write(chrome_trace)
+ 
+save_profiling_data()
 
 
 # ## Save model to disk
 
-# In[24]:
-
-
-saved_path = saver.save(sess, "../saved_models/l2_10_300e_256b_l2-reg-0.01_alpha-0.001.ckpt")
-
+saved_path = saver.save(sess, "../saved_models/%s.ckpt" % (RUN_NAME,))
 # meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
-
-
-# In[ ]:
 
 
 sess.list_devices()
 
-
-# In[25]:
-
-
 # train accuracy
-model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size = 256)
-
-
-# In[26]:
-
+model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
 
 # test accuracy
-model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size = 256)
+model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size=256)
 
 
 # ## Inference
@@ -512,34 +435,23 @@ model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size = 256)
 # - Find the maximal class
 # - Remap index to class name
 
-# In[27]:
-
-
 def inference(audio_file, Z3):
     ra = load_wav_file(os.path.abspath(audio_file))
     x = ra.reshape(1, ra.shape[0], 1, 1)
     y_hat = tf.argmax(Z3, 1)
-    prediction = sess.run(y_hat, feed_dict = {X: x})
+    prediction = sess.run(y_hat, feed_dict={X: x})
     return classes[prediction[0]]
 
 
-# In[28]:
-
-
-print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3)) # bed
-print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3)) # down
-print(inference("../data/test/audio/clip_0000adecb.wav", Z3)) # happy
-
+# # print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
+# print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
+# print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
 
 # ## Restore Model
 # 
 # ### Load Variables
 
-# In[29]:
-
-
 # Create Model, start session and then reload the variables
 
 # saver = tf.train.Saver() # create a saver for saving variables to disk
 # saver.restore(sess, "../saved_models/trained_model.ckpt")
-

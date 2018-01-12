@@ -10,9 +10,12 @@ import h5py
 import gc
 from datetime import datetime
 import scipy.io.wavfile
+from tutorial_code.input_data import AudioProcessor
 
 # from scipy.fftpack import dct
 # import matplotlib.pyplot as plt
+# import matplotlib
+# matplotlib.use('macosx')   # generate postscript output by default
 
 AUDIO_PADDING = 0  # padding value for audio vectors to make them of equal length
 
@@ -26,7 +29,7 @@ def load_wav_file(filename):
       filename: Path to the .wav file to load.
 
     Returns:
-      Numpy array holding the sample data as floats between -1.0 and 1.0.
+      Numpy array holding the 90_10_split_from_train_sample data as floats between -1.0 and 1.0.
     """
     with tf.Session(graph=tf.Graph()) as sess:
         wav_filename_placeholder = tf.placeholder(tf.string, [])
@@ -82,20 +85,14 @@ def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
     return X, Y, classes
 
 
+def fetch_features_for_sample(audio_file_path, preemphasis_alpha=0.97, frame_len_in_secs=0.02, frame_step_in_secs=0.01,
+                              NFFT=512, nFilts=40, n_leftFrames=23, n_rightFrames=8, max_nframes=98, nclasses=30):
+    return extract_mel_filter_bank_features(audio_file_path, preemphasis_alpha, frame_len_in_secs, frame_step_in_secs,
+                                            NFFT, nFilts, n_leftFrames, n_rightFrames, max_nframes)
+
+
 def get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",)):
-    # Params
-    preemphasis_alpha = 0.97
-    frame_len_in_secs = 0.02
-    frame_step_in_secs = 0.01
-    NFFT = 512
-    nFilts = 40
-    n_leftFrames = 23
-    n_rightFrames = 8
-    max_nframes = 98
-    nclasses = 30
     classes = []
-    # class_count = 0
-    # sample_count = 0
     X = []
     y = []
     for token_folder in os.scandir(input_folder_path):
@@ -104,14 +101,10 @@ def get_features_from_all_files(input_folder_path, skip_folders=("_background_no
         classes.append(token_folder.name)
         for audio_file in os.scandir(token_folder.path):
             audio_file = os.path.abspath(audio_file.path)
-            if not (audio_file).endswith('.wav'):
+            if not audio_file.endswith('.wav'):
                 continue
-            X.append(
-                extract_mel_filter_bank_features(audio_file, preemphasis_alpha, frame_len_in_secs, frame_step_in_secs,
-                                                 NFFT, nFilts, n_leftFrames, n_rightFrames, max_nframes))
+            X.append(fetch_features_for_sample(audio_file))
             y.append(token_folder.name)
-            # sample_count += 1
-        # class_count += 1
     return X, y, classes
 
 
@@ -140,9 +133,9 @@ def save_data(X_train, X_test, y_train, y_test, classes, output_folder):
     print("Saved the data to %s, %s and %s" % (train_data_file, test_data_file, classes_data_file))
 
 
-def load_data(train_data_file="../data/vectorized/sample/train_sounds.h5",
-              test_data_file="../data/vectorized/sample/test_sounds.h5",
-              classes_data_file="../data/vectorized/sample/classes_sounds.h5"):
+def load_data(train_data_file="../data/vectorized/90_10_split_from_train_sample/train_sounds.h5",
+              test_data_file="../data/vectorized/90_10_split_from_train_sample/test_sounds.h5",
+              classes_data_file="../data/vectorized/90_10_split_from_train_sample/classes_sounds.h5"):
     """
     Load vectors from disk and do initial pre-processing
     :param train_data_file: location of train h5 file
@@ -169,9 +162,9 @@ def load_data(train_data_file="../data/vectorized/sample/train_sounds.h5",
     return x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes
 
 
-def load_data_mfcc(train_data_file="../data/vectorized/sample/train_sounds.h5",
-              test_data_file="../data/vectorized/sample/test_sounds.h5",
-              classes_data_file="../data/vectorized/sample/classes_sounds.h5"):
+def load_data_mfcc(train_data_file="../data/vectorized/90_10_split_from_train_sample/train_sounds.h5",
+                   test_data_file="../data/vectorized/90_10_split_from_train_sample/test_sounds.h5",
+                   classes_data_file="../data/vectorized/90_10_split_from_train_sample/classes_sounds.h5"):
     with h5py.File(train_data_file, 'r') as hf:
         x_train_orig = hf["train_set_x"][:]
         y_train_orig = hf["train_set_y"][:]
@@ -304,30 +297,75 @@ def extract_mel_filter_bank_features(wavfile, preemphasis_alpha, frame_len_in_se
     count = 0
     for i in np.arange(n_leftFrames, nFrames - n_rightFrames):
         filter_bank_features_normalized_final[count:] = filter_bank_features_normalized[
-                                                    i - n_leftFrames:i + n_rightFrames + 1, :].flatten()
+                                                        i - n_leftFrames:i + n_rightFrames + 1, :].flatten()
         count += 1
 
     return filter_bank_features_normalized_final
 
 
-def prepare_sample(h5_inp_folder, output_folder, train_sample_size=1000, test_sample_size=60):
+def prepare_sample_from_vector(h5_inp_folder, output_folder, train_sample_size=1000, test_sample_size=60,
+                               data_loader=load_data):
     """
     Samples a h5py file generated from a audio vector train data set
     :param h5_inp_folder: folder containing train_sounds, test_sounds and classes_sounds vectorized h5 files
     :param output_folder: directory where to save the sampled files
     :param train_sample_size: number of examples as training data in the output
     :param test_sample_size: number of examples as test data in the output
+    :param data_loader: a function handler which can load previously saved vectorized data
     :return:
     """
     train_data_file = os.path.join(h5_inp_folder, 'train_sounds.h5')
     test_data_file = os.path.join(h5_inp_folder, 'test_sounds.h5')
     classes_data_file = os.path.join(h5_inp_folder, 'classes_sounds.h5')
-    X, Y, _, _, classes = load_data(train_data_file, test_data_file, classes_data_file)
+    X, Y, _, _, classes = data_loader(train_data_file, test_data_file, classes_data_file)
     print("%s: Vectorized training data" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
     X_mini, y_mini = next(random_mini_batches(X, Y, train_sample_size + test_sample_size))  # fetch the first batch
     test_size = float(test_sample_size) / (test_sample_size + train_sample_size)
     X_train, X_test, y_train, y_test = train_test_split(X_mini, y_mini, test_size=test_size, random_state=42)
     save_data(X_train, X_test, y_train, y_test, classes, output_folder)
+    print("%s: Saved the sample" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+
+
+def prepare_mfcc_sample_from_wav(input_dir, output_dir, percent_to_sample=20, test_train_ratio=0.1, words=None):
+    model_settings = {
+        "desired_samples": 160,
+        "fingerprint_size": 40,
+        "label_count": 4,
+        "window_size_samples": 100,
+        "window_stride_samples": 100,
+        "dct_coefficient_count": 40,
+    }
+    classes = set()
+    X = []
+    y = []
+    if not words:
+        words = ['bird', 'on', 'cat', 'bed', 'wow', 'dog', 'five', 'right', 'zero', 'two', 'yes', 'stop', 'tree',
+                 'left', 'one', 'off', 'down', 'nine', 'house', 'marvin', 'eight', 'six', 'go', 'three', 'four', 'no',
+                 'happy', 'seven', 'up', 'sheila']
+    # using a helper code to sample files from the input folder
+    audio_processor = AudioProcessor("", input_dir, 0, 0, words,
+                                     0, 100 - percent_to_sample, model_settings)
+    print("%s: Selected %d samples from given dataset" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                                                          len(audio_processor.data_index["training"])))
+    for sample in audio_processor.data_index["training"]:
+        X.append(fetch_features_for_sample(sample["file"]))
+        y.append(sample["label"])
+        classes.add(sample["label"])
+    print("%s: Created the sample" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+
+    # Other helpful functions which not only sample but also add background noise and return X, y
+    # Not using these directly as they do feature extraction for X than what we want
+    # with tf.Session as sess:
+    #     result_data, result_labels = audio_processor.get_unprocessed_data(10, model_settings, "training")
+    #     result_data, result_labels = audio_processor.get_data(10, 0, model_settings, 0.3, 0.1, 100, "training", sess)
+
+    y = np.array(y, dtype='|S9')
+    classes = np.array(list(classes), dtype='|S9')
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_train_ratio, random_state=42)
+    save_data(X_train, X_test, y_train, y_test, classes, output_dir)
+    print("%s: Saved the sample" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+
+    return X, y, classes
 
 
 def main():
@@ -336,13 +374,19 @@ def main():
     # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train/"):
     # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
 
-    input_folder_path = '/Users/ajakkam/Documents/Work/Anil/Practice/Kaggle/train_sample/audio/'
-    X,Y,classes = get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",))
-    Y = np.array(Y, dtype='|S9')  # to binary strings to persist on disk
-    classes = np.array(classes, dtype='|S9')  # to binary strings to persist on disk
-    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
-    print("Finished splitting all data to train-test")
-    save_data(X_train, X_test, y_train, y_test, classes, "/Users/ajakkam/Documents/Work/Anil/Practice/Kaggle/Project_speech/kaggle-tensorflow-speech-recognition/data")
+    # input_folder_path = '../train/audio/'
+    # X, Y, classes = get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",))
+    # Y = np.array(Y, dtype='|S9')  # to binary strings to persist on disk
+    # classes = np.array(classes, dtype='|S9')  # to binary strings to persist on disk
+    # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    # print("Finished splitting all data to train-test")
+    # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/")
+
+    # prepare_sample_from_vector("../data/vectorized/mfcc/", "../data/vectorized/mfcc_11.6K-1.3K_sample/", train_sample_size=11650,
+    #                test_sample_size=1300, data_loader=load_data_mfcc)
+
+    prepare_mfcc_sample_from_wav("../data/train/audio/", "../data/vectorized/mfcc_11.6K-1.3K_sample/", 20)
+
 
 if __name__ == '__main__':
     main()

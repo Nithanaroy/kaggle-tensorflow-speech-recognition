@@ -4,8 +4,9 @@ Competition home page https://www.kaggle.com/c/tensorflow-speech-recognition-cha
 
 ## Installation
 - Install python 3.x, pip, virtualenv
-- Create a folder for vitualenv
-- `source src/bin/activate`
+- Create a folder for virtual environment, say python_venv
+- `python3 -m venv python_env`
+- `source python_venv/bin/activate`
 - `cd src`
 - `pip3 install -r requirements.txt`
 
@@ -13,10 +14,10 @@ Competition home page https://www.kaggle.com/c/tensorflow-speech-recognition-cha
 - Download train and test data from https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/data
 - Extract them
 - Run `vectorize_train_data()` in src/utils.py passing the path to the train/ extracted
-- Run `save_data()` in src/utills.py to persist the vectorized train data
+- Run `save_data()` in src/utils.py to persist the vectorized train data
 
 ### Preparing sample data
-- Run `prepare_sample()` in src/utills.py which creates a small sample from the large vector data generated above 
+- Run `prepare_sample_from_vector()` in src/utils.py which creates a small sample from the large vector data generated above 
 - The sample is used for quickly iterating various models
 
 ## To Develop
