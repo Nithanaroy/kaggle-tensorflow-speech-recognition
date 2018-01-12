@@ -212,7 +212,7 @@ def convert_strings_to_one_hot(Y, classes):
 
 
 def convert_to_one_hot(Y, C):
-    Y = np.eye(C)[Y.reshape(-1)].T
+    Y = np.eye(C)[Y.reshape(-1)]
     return Y
 
 
@@ -391,10 +391,10 @@ def prepare_mfcc_sample_from_wav(input_dir, output_dir, percent_to_sample=20, te
 
 
 def main():
-    X, Y, classes = vectorize_wav_folder("../data/train/audio")
-    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
-    save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train2/")
-    x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
+    # X, Y, classes = vectorize_wav_folder("../data/train/audio")
+    # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train2/")
+    # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
 
     # input_folder_path = '../train/audio/'
     # X, Y, classes = get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",))
@@ -404,8 +404,8 @@ def main():
     # print("Finished splitting all data to train-test")
     # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/")
 
-    # prepare_sample_from_vector("../data/vectorized/mfcc/", "../data/vectorized/mfcc_11.6K-1.3K_sample/", train_sample_size=11650,
-    #                test_sample_size=1300, data_loader=load_data_mfcc)
+    prepare_sample_from_vector("../data/vectorized/90_10_split_from_train2/",
+                               "../data/vectorized/90_10_split_from_train2_sample/")
 
     # prepare_mfcc_sample_from_wav("../data/train/audio/", "../data/vectorized/mfcc_20percent-0.1test_sample/", 20)
 

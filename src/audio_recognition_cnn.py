@@ -21,12 +21,25 @@ np.random.seed(1)
 
 # ## Import the dataset
 
-# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5", "../data/test_sounds.h5", "../data/classes_sounds.h5")
-# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data() # sample data
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc(
-    "../data/vectorized/mfcc_20percent-0.1test_sample/train_sounds.h5",
-    "../data/vectorized/mfcc_20percent-0.1test_sample/test_sounds.h5",
-    "../data/vectorized/mfcc_20percent-0.1test_sample/classes_sounds.h5")  # mfcc data
+# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5",
+#                                                                                "../data/test_sounds.h5",
+#                                                                                "../data/classes_sounds.h5")
+X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
+    "../data/vectorized/90_10_split_from_train2/train_sounds.h5",
+    "../data/vectorized/90_10_split_from_train2/test_sounds.h5",
+    "../data/vectorized/90_10_split_from_train2/classes_sounds.h5")
+
+# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
+#     "../data/vectorized/90_10_split_from_train2_sample/train_sounds.h5",
+#     "../data/vectorized/90_10_split_from_train2_sample/test_sounds.h5",
+#     "../data/vectorized/90_10_split_from_train2_sample/classes_sounds.h5")
+
+# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data()  # sample data
+
+# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc(
+#     "../data/vectorized/mfcc_20percent-0.1test_sample/train_sounds.h5",
+#     "../data/vectorized/mfcc_20percent-0.1test_sample/test_sounds.h5",
+#     "../data/vectorized/mfcc_20percent-0.1test_sample/classes_sounds.h5")  # mfcc data
 
 # ## Explore the dataset
 
@@ -117,7 +130,7 @@ def initialize_parameters():
 #     - Flatten the previous output.
 #     - FULLYCONNECTED (FC) layer: outputs 30 classes one for each audio utterance
 
-def forward_propagation(X):
+def forward_propagation2(X):
     """
     Implements the forward propagation for the model:
     CONV2D -> RELU -> MAXPOOL -> CONV2D -> RELU -> MAXPOOL -> FLATTEN -> FULLYCONNECTED
@@ -151,6 +164,25 @@ def forward_propagation(X):
     A3 = tf.nn.relu(Z3, name="a3")
     Z4 = tf.contrib.layers.fully_connected(A3, 30, activation_fn=None, weights_regularizer=regularizer6)
     return Z4
+
+
+def forward_propagation(X):
+    regularizer1 = tf.contrib.layers.l2_regularizer(scale=0.001)
+    regularizer2 = tf.contrib.layers.l2_regularizer(scale=0.01)
+    regularizer3 = tf.contrib.layers.l2_regularizer(scale=0.1)
+    regularizer4 = tf.contrib.layers.l2_regularizer(scale=1.0)
+    regularizer5 = tf.contrib.layers.l2_regularizer(scale=10.0)
+    regularizer6 = None
+
+    Z1 = tf.layers.conv2d(X, 8, (4, 1), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer2, name="z1")
+    A1 = tf.nn.relu(Z1, name="a1")
+    P1 = tf.nn.max_pool(A1, ksize=[1, 8, 1, 1], strides=[1, 8, 1, 1], padding='SAME', name="p1")
+    Z2 = tf.layers.conv2d(P1, 16, (2, 1), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer3, name="z2")
+    A2 = tf.nn.relu(Z2, name="a2")
+    P2 = tf.nn.max_pool(A2, ksize=[1, 4, 1, 1], strides=[1, 4, 1, 1], padding='SAME', name="p2")
+    P2 = tf.contrib.layers.flatten(P2)
+    Z3 = tf.contrib.layers.fully_connected(P2, 30, activation_fn=None, weights_regularizer=regularizer4)
+    return Z3
 
 
 # tf.reset_default_graph()
@@ -340,8 +372,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
               cost, optimizer, learning_rate=0.011, minibatch_size=64, num_epochs=100, print_cost=True):
     seed = 3  # to keep results consistent (numpy seed)
     m = X_train.shape[0]
-    num_minibatches = int(
-        np.ceil(m / float(minibatch_size)))  # number of minibatches of size minibatch_size in the train set
+    num_minibatches = int(np.ceil(m / float(minibatch_size)))
     training_costs = []
     testing_costs = []
 
@@ -367,8 +398,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
         # Print the cost every # epochs
         if print_cost == True and epoch % 10 == 0:
             training_costs.append(minibatch_cost)
-            temp_cost = 1
-            # temp_cost = sess.run(cost, feed_dict = {X: X_test, Y: Y_test})
+            temp_cost = sess.run(cost, feed_dict={X: X_test, Y: Y_test})
             testing_costs.append(temp_cost)
             print("%s\t%i\t%f\t%f" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, minibatch_cost, temp_cost))
 
@@ -384,7 +414,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
 
 
 learning_rate = 0.001
-num_epochs = 1
+num_epochs = 300
 minibatch_size = 256
 Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
 
@@ -392,7 +422,8 @@ saver = tf.train.Saver()  # create a saver for saving variables to disk
 
 # Define Tensor Board Settings after creating the graph
 
-RUN_NAME = "N_MFCC_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
+RUN_NAME = "N_alp-%s_batchsz-%s_ep-%s_L2-lambda1--0.01_L2-lambda2--0.1_L2-lambda3--1" % (
+    learning_rate, minibatch_size, num_epochs)
 training_writer = tf.summary.FileWriter("../logs/{}/training".format(RUN_NAME), sess.graph)
 testing_writer = tf.summary.FileWriter("../logs/{}/testing".format(RUN_NAME), sess.graph)
 
@@ -400,6 +431,12 @@ training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y
                                           cost, optimizer, learning_rate=learning_rate,
                                           minibatch_size=minibatch_size, num_epochs=num_epochs)
 
+# ## Save model to disk
+os.makedirs("../saved_models/%s" % (RUN_NAME,))
+saved_path = saver.save(sess, "../saved_models/%s/%s.ckpt" % (RUN_NAME, RUN_NAME))
+
+
+# meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
 
 # ### Save profiling data to disk
 
@@ -412,12 +449,6 @@ def save_profiling_data():
 
 
 save_profiling_data()
-
-# ## Save model to disk
-os.makedirs("../saved_models/%s" % (RUN_NAME,))
-saved_path = saver.save(sess, "../saved_models/%s/%s.ckpt" % (RUN_NAME, RUN_NAME))
-# meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
-
 
 sess.list_devices()
 
@@ -442,9 +473,10 @@ def inference(audio_file, Z3):
     prediction = sess.run(y_hat, feed_dict={X: x})
     return classes[prediction[0]]
 
-# # print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
-# print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
-# print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
+
+print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
+print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
+print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
 
 # ## Restore Model
 # 
