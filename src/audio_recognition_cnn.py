@@ -24,10 +24,10 @@ np.random.seed(1)
 # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5",
 #                                                                                "../data/test_sounds.h5",
 #                                                                                "../data/classes_sounds.h5")
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
-    "../data/vectorized/90_10_split_from_train2/train_sounds.h5",
-    "../data/vectorized/90_10_split_from_train2/test_sounds.h5",
-    "../data/vectorized/90_10_split_from_train2/classes_sounds.h5")
+# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
+#     "../data/vectorized/90_10_split_from_train2/train_sounds.h5",
+#     "../data/vectorized/90_10_split_from_train2/test_sounds.h5",
+#     "../data/vectorized/90_10_split_from_train2/classes_sounds.h5")
 
 # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
 #     "../data/vectorized/90_10_split_from_train2_sample/train_sounds.h5",
@@ -36,17 +36,19 @@ X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
 
 # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data()  # sample data
 
-# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc(
-#     "../data/vectorized/mfcc_20percent-0.1test_sample/train_sounds.h5",
-#     "../data/vectorized/mfcc_20percent-0.1test_sample/test_sounds.h5",
-#     "../data/vectorized/mfcc_20percent-0.1test_sample/classes_sounds.h5")  # mfcc data
+X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc(
+    "../data/vectorized/mfcc_zero_context/train_sounds.h5",
+    "../data/vectorized/mfcc_zero_context/test_sounds.h5",
+    "../data/vectorized/mfcc_zero_context/classes_sounds.h5")  # mfcc data
 
 # ## Explore the dataset
 
 X_train = X_train_orig
 X_test = X_test_orig
-Y_train = convert_to_one_hot(Y_train_orig, len(classes))
-Y_test = convert_to_one_hot(Y_test_orig, len(classes))
+# Y_train = convert_to_one_hot(Y_train_orig, len(classes))
+# Y_test = convert_to_one_hot(Y_test_orig, len(classes))
+Y_train = convert_strings_to_one_hot(Y_train_orig, classes)
+Y_test = convert_strings_to_one_hot(Y_test_orig, classes)
 print("number of training examples = " + str(X_train.shape[0]))
 print("number of test examples = " + str(X_test.shape[0]))
 print("X_train shape: " + str(X_train.shape))
@@ -354,7 +356,7 @@ def create_model(X_train, Y_train, learning_rate):
     n_y = Y_train.shape[1]
 
     X, Y = create_placeholders(n_l, n_h, n_y)
-    Z3 = forward_propagation(X)
+    Z3 = forward_propagation2(X)
     cost = compute_cost(Z3, Y)
 
     # Backpropagation: Using AdamOptimizer to minimize the cost.
@@ -388,15 +390,18 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
         minibatch_cost = 0.
         seed = seed + 1
         minibatches = random_mini_batches(X_train, Y_train, minibatch_size, seed)
-        for minibatch in minibatches:
+        for iminibatch, minibatch in enumerate(minibatches):
             (minibatch_X, minibatch_Y) = minibatch
             # IMPORTANT: The line that runs the graph on a minibatch.
             # Run the session to execute the optimizer and the cost, the feedict should contain a minibatch for (X,Y).
             _, temp_cost = sess.run([optimizer, cost], feed_dict={X: minibatch_X, Y: minibatch_Y})
             minibatch_cost += temp_cost / num_minibatches
+            if print_cost and epoch == 0 and iminibatch % 10 == 0:
+                print(" %s\t%i.%i\t%f\t%s" % (
+                datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, iminibatch, minibatch_cost, "--"))
 
         # Print the cost every # epochs
-        if print_cost == True and epoch % 10 == 0:
+        if print_cost == True and epoch % 1 == 0:
             training_costs.append(minibatch_cost)
             temp_cost = sess.run(cost, feed_dict={X: X_test, Y: Y_test})
             testing_costs.append(temp_cost)
@@ -414,7 +419,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
 
 
 learning_rate = 0.001
-num_epochs = 300
+num_epochs = 25
 minibatch_size = 256
 Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
 
@@ -422,7 +427,7 @@ saver = tf.train.Saver()  # create a saver for saving variables to disk
 
 # Define Tensor Board Settings after creating the graph
 
-RUN_NAME = "N_alp-%s_batchsz-%s_ep-%s_L2-lambda1--0.01_L2-lambda2--0.1_L2-lambda3--1" % (
+RUN_NAME = "N_MFCC-0_alp-%s_batchsz-%s_ep-%s" % (
     learning_rate, minibatch_size, num_epochs)
 training_writer = tf.summary.FileWriter("../logs/{}/training".format(RUN_NAME), sess.graph)
 testing_writer = tf.summary.FileWriter("../logs/{}/testing".format(RUN_NAME), sess.graph)
@@ -452,11 +457,11 @@ save_profiling_data()
 
 sess.list_devices()
 
-# train accuracy
-model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
-
 # test accuracy
 model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size=256)
+
+# train accuracy
+model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
 
 
 # ## Inference
@@ -473,10 +478,9 @@ def inference(audio_file, Z3):
     prediction = sess.run(y_hat, feed_dict={X: x})
     return classes[prediction[0]]
 
-
-print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
-print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
-print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
+# print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
+# print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
+# print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
 
 # ## Restore Model
 # 

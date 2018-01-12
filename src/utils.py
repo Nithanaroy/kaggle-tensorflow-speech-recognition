@@ -120,8 +120,9 @@ def get_features_from_all_files(input_folder_path, skip_folders=("_background_no
             audio_file = os.path.abspath(audio_file.path)
             if not audio_file.endswith('.wav'):
                 continue
-            X.append(fetch_features_for_sample(audio_file))
+            X.append(fetch_features_for_sample(audio_file, n_leftFrames=0, n_rightFrames=0))
             y.append(token_folder.name)
+        print("%s: Completed processing %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), token_folder.name))
     return X, y, classes
 
 
@@ -396,16 +397,16 @@ def main():
     # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train2/")
     # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
 
-    # input_folder_path = '../train/audio/'
-    # X, Y, classes = get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",))
-    # Y = np.array(Y, dtype='|S9')  # to binary strings to persist on disk
-    # classes = np.array(classes, dtype='|S9')  # to binary strings to persist on disk
-    # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
-    # print("Finished splitting all data to train-test")
-    # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/")
+    input_folder_path = '../data/train/audio/'
+    X, Y, classes = get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",))
+    Y = np.array(Y, dtype='|S9')  # to binary strings to persist on disk
+    classes = np.array(classes, dtype='|S9')  # to binary strings to persist on disk
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    print("Finished splitting all data to train-test")
+    save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/mfcc_zero_context/")
 
-    prepare_sample_from_vector("../data/vectorized/90_10_split_from_train2/",
-                               "../data/vectorized/90_10_split_from_train2_sample/")
+    # prepare_sample_from_vector("../data/vectorized/90_10_split_from_train2/",
+    #                            "../data/vectorized/90_10_split_from_train2_sample/")
 
     # prepare_mfcc_sample_from_wav("../data/train/audio/", "../data/vectorized/mfcc_20percent-0.1test_sample/", 20)
 
