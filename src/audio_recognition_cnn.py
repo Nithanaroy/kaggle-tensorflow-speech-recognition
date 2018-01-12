@@ -23,23 +23,24 @@ np.random.seed(1)
 
 # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5", "../data/test_sounds.h5", "../data/classes_sounds.h5")
 # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data() # sample data
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/vectorized/mfcc/train_sounds.h5",
-                                                                          "../data/vectorized/mfcc/test_sounds.h5",
-                                                                          "../data/vectorized/mfcc/classes_sounds.h5")  # mfcc data
+X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc(
+    "../data/vectorized/mfcc_20percent-0.1test_sample/train_sounds.h5",
+    "../data/vectorized/mfcc_20percent-0.1test_sample/test_sounds.h5",
+    "../data/vectorized/mfcc_20percent-0.1test_sample/classes_sounds.h5")  # mfcc data
 
 # ## Explore the dataset
 
 X_train = X_train_orig
 X_test = X_test_orig
-Y_train = convert_to_one_hot(Y_train_orig, classes)
-Y_test = convert_to_one_hot(Y_test_orig, classes)
-print ("number of training examples = " + str(X_train.shape[0]))
-print ("number of test examples = " + str(X_test.shape[0]))
-print ("X_train shape: " + str(X_train.shape))
-print ("Y_train shape: " + str(Y_train.shape))
-print ("X_test shape: " + str(X_test.shape))
-print ("Y_test shape: " + str(Y_test.shape))
-print ("classes shape: " + str(classes.shape))
+Y_train = convert_to_one_hot(Y_train_orig, len(classes))
+Y_test = convert_to_one_hot(Y_test_orig, len(classes))
+print("number of training examples = " + str(X_train.shape[0]))
+print("number of test examples = " + str(X_test.shape[0]))
+print("X_train shape: " + str(X_train.shape))
+print("Y_train shape: " + str(Y_train.shape))
+print("X_test shape: " + str(X_test.shape))
+print("Y_test shape: " + str(Y_test.shape))
+print("classes shape: " + str(classes.shape))
 
 
 # ## Create input placeholders
@@ -283,9 +284,9 @@ def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=64, percent_data=1
 tf.reset_default_graph()  # to be able to rerun the model without overwriting tf variables
 
 # Start an interactive session
-# config = tf.ConfigProto(device_count={'GPU': 0})
-# sess = tf.InteractiveSession(config=config)
-sess = tf.InteractiveSession()
+config = tf.ConfigProto(device_count={'GPU': 0})
+sess = tf.InteractiveSession(config=config)
+# sess = tf.InteractiveSession()
 
 # ### Profiling
 
@@ -384,7 +385,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
 
 learning_rate = 0.001
 num_epochs = 1
-minibatch_size = 16
+minibatch_size = 256
 Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
 
 saver = tf.train.Saver()  # create a saver for saving variables to disk
@@ -406,16 +407,15 @@ training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y
 def save_profiling_data():
     fetched_timeline = timeline.Timeline(run_metadata.step_stats)
     chrome_trace = fetched_timeline.generate_chrome_trace_format()
-    time_id = int(time())
-    with open('../experiments/%s.json' % (RUN_NAME,), 'w') as f:
+    with open('../profiling_data/%s.json' % (RUN_NAME,), 'w') as f:
         f.write(chrome_trace)
- 
+
+
 save_profiling_data()
 
-
 # ## Save model to disk
-
-saved_path = saver.save(sess, "../saved_models/%s.ckpt" % (RUN_NAME,))
+os.makedirs("../saved_models/%s" % (RUN_NAME,))
+saved_path = saver.save(sess, "../saved_models/%s/%s.ckpt" % (RUN_NAME, RUN_NAME))
 # meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
 
 
@@ -441,7 +441,6 @@ def inference(audio_file, Z3):
     y_hat = tf.argmax(Z3, 1)
     prediction = sess.run(y_hat, feed_dict={X: x})
     return classes[prediction[0]]
-
 
 # # print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
 # print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down

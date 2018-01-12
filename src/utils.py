@@ -14,8 +14,9 @@ from tutorial_code.input_data import AudioProcessor
 
 # from scipy.fftpack import dct
 # import matplotlib.pyplot as plt
-# import matplotlib
-# matplotlib.use('macosx')   # generate postscript output by default
+import matplotlib
+
+matplotlib.use('PS')  # generate postscript output by default
 
 AUDIO_PADDING = 0  # padding value for audio vectors to make them of equal length
 
@@ -40,7 +41,7 @@ def load_wav_file(filename):
             feed_dict={wav_filename_placeholder: filename}).audio.flatten()
 
 
-def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
+def vectorize_wav_folder(inp_folder_path, skip_folders=("_background_noise_",)):
     """
     Transforms .wav files to numpy vectors
     Since all .wav files may not be of the same length, smaller vectors are right padded with zeros
@@ -56,13 +57,29 @@ def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
     x_raw_audio = []
     y_raw = []
     classes = []
-    for token_folder in os.scandir(inp_folder_path):
-        if token_folder.name in skip_folders or not token_folder.is_dir():
-            continue
+
+    def audio_folder_gen():
+        """
+        Fetches valid audio folders
+        :return: a generator which returns reference to a folder
+        """
+        for folder in os.scandir(inp_folder_path):
+            if folder.name in skip_folders or not folder.is_dir():
+                continue
+            yield folder
+
+    # collect all classes
+    for token_folder in audio_folder_gen():
         classes.append(token_folder.name)
+
+    # Assumption: all classes are unique phrases
+    classes_map = dict(zip(classes, range(len(classes))))  # assigns numbers to each class string
+
+    # collect all audio and vectorize
+    for token_folder in audio_folder_gen():
         for audio_file in os.scandir(token_folder.path):
             x_raw_audio.append(load_wav_file(os.path.abspath(audio_file.path)))
-            y_raw.append(token_folder.name)
+            y_raw.append(classes_map[token_folder.name])
         print("%s: Completed processing %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), token_folder.name))
 
     print("%s: Vectorized all wav files" % datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -78,9 +95,9 @@ def vectorize_train_data(inp_folder_path, skip_folders=("_background_noise_",)):
     df = None
     gc.collect()
 
-    Y = np.array(y_raw, dtype='|S9')  # to binary strings to persist on disk
+    Y = np.array(y_raw)  # to binary strings to persist on disk
 
-    classes = np.array(classes, dtype='|S9')  # to binary strings to persist on disk
+    classes = np.array(list(classes_map.items()), dtype='|S9')  # to binary strings to persist on disk
 
     return X, Y, classes
 
@@ -184,14 +201,19 @@ def load_data_mfcc(train_data_file="../data/vectorized/90_10_split_from_train_sa
     return x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes
 
 
-def convert_to_one_hot(Y, classes):
+def convert_strings_to_one_hot(Y, classes):
     """
-    Converts numpy vector Y to one hot encoding for training
+    Converts numpy vector Y of type strings to one hot encoding for training
     :param Y: numpy Y vector of shape (class string, 1)
     :param classes: list of all possible classes
     :return: numpy vector of shape (Y.shape[0], len(classes))
     """
     return label_binarize(Y, classes=classes)
+
+
+def convert_to_one_hot(Y, C):
+    Y = np.eye(C)[Y.reshape(-1)].T
+    return Y
 
 
 def random_mini_batches(X, Y, mini_batch_size=64, seed=0):
@@ -369,10 +391,10 @@ def prepare_mfcc_sample_from_wav(input_dir, output_dir, percent_to_sample=20, te
 
 
 def main():
-    # X, Y, classes = vectorize_train_data("../data/train/audio")
-    # X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
-    # save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train/"):
-    # x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
+    X, Y, classes = vectorize_wav_folder("../data/train/audio")
+    X_train, X_test, y_train, y_test = train_test_split(X, Y, test_size=0.1, random_state=42)
+    save_data(X_train, X_test, y_train, y_test, classes, "../data/vectorized/90_10_split_from_train2/")
+    x_train_orig, y_train_orig, x_test_orig, y_test_orig, classes = load_data()
 
     # input_folder_path = '../train/audio/'
     # X, Y, classes = get_features_from_all_files(input_folder_path, skip_folders=("_background_noise_",))
@@ -385,7 +407,7 @@ def main():
     # prepare_sample_from_vector("../data/vectorized/mfcc/", "../data/vectorized/mfcc_11.6K-1.3K_sample/", train_sample_size=11650,
     #                test_sample_size=1300, data_loader=load_data_mfcc)
 
-    prepare_mfcc_sample_from_wav("../data/train/audio/", "../data/vectorized/mfcc_11.6K-1.3K_sample/", 20)
+    # prepare_mfcc_sample_from_wav("../data/train/audio/", "../data/vectorized/mfcc_20percent-0.1test_sample/", 20)
 
 
 if __name__ == '__main__':

@@ -262,3 +262,6 @@ fabric.properties
 # Custom - Added by Nitin
 data
 python_venv
+
+ # too huge
+saved_models/N_MFCC_alp-0.001_batchsz-256_ep-1/

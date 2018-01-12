@@ -13,7 +13,7 @@ Competition home page https://www.kaggle.com/c/tensorflow-speech-recognition-cha
 ## Peparing the data for training
 - Download train and test data from https://www.kaggle.com/c/tensorflow-speech-recognition-challenge/data
 - Extract them
-- Run `vectorize_train_data()` in src/utils.py passing the path to the train/ extracted
+- Run `vectorize_wav_folder()` in src/utils.py passing the path to the train/ extracted
 - Run `save_data()` in src/utils.py to persist the vectorized train data
 
 ### Preparing sample data
