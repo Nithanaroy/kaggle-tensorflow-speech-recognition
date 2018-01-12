@@ -265,3 +265,4 @@ python_venv
 
  # too huge
 saved_models/N_MFCC_alp-0.001_batchsz-256_ep-1/
+saved_models/N_MFCC-0_alp-0.001_batchsz-256_ep-25/

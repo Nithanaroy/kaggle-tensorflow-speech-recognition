@@ -22,7 +22,9 @@ Competition home page https://www.kaggle.com/c/tensorflow-speech-recognition-cha
 
 ## To Develop
 - run the commands in start.sh in order to start the jupyter notebook server
-- Then open src/src/audio_recognition_cnn.ipynb and follow the guide
+- Then open src/audio_recognition_cnn.ipynb and follow the guide
+- src/audio_recognition_cnn.py is more exhaustive and is more up to date
+- set **STOP_TRAINING_ON_NEXT_EPOCH** environment variable to **Y** if you want to stop the training before starting the next epoch
 
 ## Use the trained model for inference
 - We will soon publish our trained model after the competition submission timeline ends

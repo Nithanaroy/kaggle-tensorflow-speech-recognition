@@ -9,53 +9,14 @@
 import numpy as np
 # import matplotlib.pyplot as plt
 import tensorflow as tf
-from tensorflow.python.framework import ops
 from utils import *
 from datetime import datetime
-from time import time
 from tensorflow.python.client import timeline  # for profiling
 from math import ceil
+import os
 
-# get_ipython().magic('matplotlib notebook')
-np.random.seed(1)
-
-# ## Import the dataset
-
-# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5",
-#                                                                                "../data/test_sounds.h5",
-#                                                                                "../data/classes_sounds.h5")
-# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
-#     "../data/vectorized/90_10_split_from_train2/train_sounds.h5",
-#     "../data/vectorized/90_10_split_from_train2/test_sounds.h5",
-#     "../data/vectorized/90_10_split_from_train2/classes_sounds.h5")
-
-# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
-#     "../data/vectorized/90_10_split_from_train2_sample/train_sounds.h5",
-#     "../data/vectorized/90_10_split_from_train2_sample/test_sounds.h5",
-#     "../data/vectorized/90_10_split_from_train2_sample/classes_sounds.h5")
-
-# X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data()  # sample data
-
-X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc(
-    "../data/vectorized/mfcc_zero_context/train_sounds.h5",
-    "../data/vectorized/mfcc_zero_context/test_sounds.h5",
-    "../data/vectorized/mfcc_zero_context/classes_sounds.h5")  # mfcc data
-
-# ## Explore the dataset
-
-X_train = X_train_orig
-X_test = X_test_orig
-# Y_train = convert_to_one_hot(Y_train_orig, len(classes))
-# Y_test = convert_to_one_hot(Y_test_orig, len(classes))
-Y_train = convert_strings_to_one_hot(Y_train_orig, classes)
-Y_test = convert_strings_to_one_hot(Y_test_orig, classes)
-print("number of training examples = " + str(X_train.shape[0]))
-print("number of test examples = " + str(X_test.shape[0]))
-print("X_train shape: " + str(X_train.shape))
-print("Y_train shape: " + str(Y_train.shape))
-print("X_test shape: " + str(X_test.shape))
-print("Y_test shape: " + str(Y_test.shape))
-print("classes shape: " + str(classes.shape))
+# A way to hint the trainer to stop training on the next epoch
+STOP_TRAINING_ON_NEXT_EPOCH = "STOP_TRAINING_ON_NEXT_EPOCH"
 
 
 # ## Create input placeholders
@@ -155,10 +116,14 @@ def forward_propagation2(X):
     regularizer5 = tf.contrib.layers.l2_regularizer(scale=10.0)
     regularizer6 = None
 
-    Z1 = tf.layers.conv2d(X, 64, (20, 8), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer6, name="z1")
+    Z1 = tf.layers.conv2d(X, 64, (20, 8), strides=[1, 1], padding='SAME',
+                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
+                          kernel_regularizer=regularizer6, name="z1")
     A1 = tf.nn.relu(Z1, name="a1")
     P1 = tf.nn.max_pool(A1, ksize=[1, 1, 3, 1], strides=[1, 2, 1, 1], padding='SAME', name="p1")
-    Z2 = tf.layers.conv2d(P1, 64, (10, 4), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer6, name="z2")
+    Z2 = tf.layers.conv2d(P1, 64, (10, 4), strides=[1, 1], padding='SAME',
+                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
+                          kernel_regularizer=regularizer6, name="z2")
     A2 = tf.nn.relu(Z2, name="a2")
     P2 = tf.nn.max_pool(A2, ksize=[1, 1, 1, 1], strides=[1, 1, 1, 1], padding='SAME', name="p2")
     P3 = tf.contrib.layers.flatten(P2)
@@ -176,10 +141,14 @@ def forward_propagation(X):
     regularizer5 = tf.contrib.layers.l2_regularizer(scale=10.0)
     regularizer6 = None
 
-    Z1 = tf.layers.conv2d(X, 8, (4, 1), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer2, name="z1")
+    Z1 = tf.layers.conv2d(X, 8, (4, 1), strides=[1, 1], padding='SAME',
+                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
+                          kernel_regularizer=regularizer2, name="z1")
     A1 = tf.nn.relu(Z1, name="a1")
     P1 = tf.nn.max_pool(A1, ksize=[1, 8, 1, 1], strides=[1, 8, 1, 1], padding='SAME', name="p1")
-    Z2 = tf.layers.conv2d(P1, 16, (2, 1), strides=[1, 1], padding='SAME', kernel_regularizer=regularizer3, name="z2")
+    Z2 = tf.layers.conv2d(P1, 16, (2, 1), strides=[1, 1], padding='SAME',
+                          kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
+                          kernel_regularizer=regularizer3, name="z2")
     A2 = tf.nn.relu(Z2, name="a2")
     P2 = tf.nn.max_pool(A2, ksize=[1, 4, 1, 1], strides=[1, 4, 1, 1], padding='SAME', name="p2")
     P2 = tf.contrib.layers.flatten(P2)
@@ -265,70 +234,15 @@ def model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=64, percent_data=1
     return train_accuracy
 
 
-#
-# # ### Plot Helper for (cost, test accuracy, train accuracy) VS (# iterations)
-#
-# #
-#
-# def plot_cost_test_train(num_epochs, costs, test_accs, title = ""):
-#     fig, ax1 = plt.subplots()
-#     t = np.arange(num_epochs)
-#     ax1.plot(t, costs, 'b-')
-#     ax1.set_xlabel('iterations (per tens)')
-#     # Make the y-axis label, ticks and tick labels match the line color.
-#     ax1.set_ylabel('train cost', color='b')
-#     ax1.tick_params('y', colors='b')
-#
-# #     ax2 = ax1.twinx()
-# #     ax2.plot(t, training_accs, 'r-')
-# #     ax2.set_ylabel('train accuracy', color='r')
-# #     ax2.tick_params('y', colors='r')
-#
-#     ax3 = ax1.twinx()
-#     ax3.plot(t, test_accs, 'm-')
-#     ax3.set_ylabel('test cost', color='m')
-#     ax3.tick_params('y', colors='m')
-# #     ax3.spines['right'].set_position(('axes', 1.2))
-#
-#     fig.tight_layout()
-# #     fig.subplots_adjust(right=0.75) # add space on the right for y3 axis
-#     plt.title(title)
-#     plt.show()
-#
-#
-# #
-#
-# def plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, title = ""):
-#     num_points = len(training_costs)
-#     t = np.arange(num_points) * (num_epochs / num_points)
-#
-#     plt.plot(t, training_costs, color="b", linestyle="-")
-#     plt.plot(t, testing_costs, color="m", linestyle="-")
-#
-#     plt.title(title)
-#     plt.show()
+## Model
 
-
-# ## Model
-# 
 # Connects all the functions and sets up training with mini batches
 
-# ### Start a session
-
-tf.reset_default_graph()  # to be able to rerun the model without overwriting tf variables
-
-# Start an interactive session
-config = tf.ConfigProto(device_count={'GPU': 0})
-sess = tf.InteractiveSession(config=config)
-# sess = tf.InteractiveSession()
-
-# ### Profiling
-
-options = tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
-run_metadata = tf.RunMetadata()
+### Start a session
 
 
 # ### Tensorboard Static Settings
+
 
 def create_model(X_train, Y_train, learning_rate):
     """
@@ -370,8 +284,8 @@ def create_model(X_train, Y_train, learning_rate):
     return Z3, X, Y, cost, optimizer
 
 
-def run_model(X_train, Y_train, X_test, Y_test, X, Y,
-              cost, optimizer, learning_rate=0.011, minibatch_size=64, num_epochs=100, print_cost=True):
+def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, training_writer, testing_writer,
+              learning_rate=0.011, minibatch_size=64, num_epochs=100, print_cost=True):
     seed = 3  # to keep results consistent (numpy seed)
     m = X_train.shape[0]
     num_minibatches = int(np.ceil(m / float(minibatch_size)))
@@ -387,6 +301,10 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
 
     # Do the training loop
     for epoch in range(num_epochs):
+
+        if stop_early():
+            break
+
         minibatch_cost = 0.
         seed = seed + 1
         minibatches = random_mini_batches(X_train, Y_train, minibatch_size, seed)
@@ -398,7 +316,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
             minibatch_cost += temp_cost / num_minibatches
             if print_cost and epoch == 0 and iminibatch % 10 == 0:
                 print(" %s\t%i.%i\t%f\t%s" % (
-                datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, iminibatch, minibatch_cost, "--"))
+                    datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, iminibatch, minibatch_cost, "--"))
 
         # Print the cost every # epochs
         if print_cost == True and epoch % 1 == 0:
@@ -418,50 +336,32 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y,
     return training_costs, testing_costs
 
 
-learning_rate = 0.001
-num_epochs = 25
-minibatch_size = 256
-Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
+def stop_early():
+    # For early manual stopping using the global environment variable
+    msg_template = "I see you asked me to stop training using the environment variable, '%s'. Are you sure you want me to stop [yes/no]? "
+    if STOP_TRAINING_ON_NEXT_EPOCH in os.environ and os.environ[STOP_TRAINING_ON_NEXT_EPOCH] == "Y":
+        while True:
+            response = input(msg_template % (STOP_TRAINING_ON_NEXT_EPOCH,))
+            if response == "yes":
+                print("Stopped training. Continuing with next steps")
+                return True
+            elif response == "no":
+                print(
+                    "Continuing to train. I'll ask you again if you set the value of the enviroment variable, '%s' to Y before starting the next epoch." % (
+                        STOP_TRAINING_ON_NEXT_EPOCH,))
+                return False
+            else:
+                print("Could not understand what you said. Type yes if you want me to stop training, else no.")
 
-saver = tf.train.Saver()  # create a saver for saving variables to disk
-
-# Define Tensor Board Settings after creating the graph
-
-RUN_NAME = "N_MFCC-0_alp-%s_batchsz-%s_ep-%s" % (
-    learning_rate, minibatch_size, num_epochs)
-training_writer = tf.summary.FileWriter("../logs/{}/training".format(RUN_NAME), sess.graph)
-testing_writer = tf.summary.FileWriter("../logs/{}/testing".format(RUN_NAME), sess.graph)
-
-training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y,
-                                          cost, optimizer, learning_rate=learning_rate,
-                                          minibatch_size=minibatch_size, num_epochs=num_epochs)
-
-# ## Save model to disk
-os.makedirs("../saved_models/%s" % (RUN_NAME,))
-saved_path = saver.save(sess, "../saved_models/%s/%s.ckpt" % (RUN_NAME, RUN_NAME))
-
-
-# meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
 
 # ### Save profiling data to disk
 
 # Create the Timeline object, and write it to a json file
-def save_profiling_data():
+def save_profiling_data_to_disk(run_metadata, RUN_NAME):
     fetched_timeline = timeline.Timeline(run_metadata.step_stats)
     chrome_trace = fetched_timeline.generate_chrome_trace_format()
     with open('../profiling_data/%s.json' % (RUN_NAME,), 'w') as f:
         f.write(chrome_trace)
-
-
-save_profiling_data()
-
-sess.list_devices()
-
-# test accuracy
-model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size=256)
-
-# train accuracy
-model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
 
 
 # ## Inference
@@ -471,22 +371,145 @@ model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
 # - Find the maximal class
 # - Remap index to class name
 
-def inference(audio_file, Z3):
+def inference(audio_file, sess, X, classes, Z3):
     ra = load_wav_file(os.path.abspath(audio_file))
     x = ra.reshape(1, ra.shape[0], 1, 1)
     y_hat = tf.argmax(Z3, 1)
     prediction = sess.run(y_hat, feed_dict={X: x})
     return classes[prediction[0]]
 
-# print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
-# print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
-# print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
 
-# ## Restore Model
-# 
-# ### Load Variables
+def save_model_to_disk(RUN_NAME, saver, sess):
+    os.makedirs("../saved_models/%s" % (RUN_NAME,))
+    saved_path = saver.save(sess, "../saved_models/%s/%s.ckpt" % (RUN_NAME, RUN_NAME))
+    print("%s: Saved model to disk at %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), saved_path))
 
-# Create Model, start session and then reload the variables
 
-# saver = tf.train.Saver() # create a saver for saving variables to disk
-# saver.restore(sess, "../saved_models/trained_model.ckpt")
+def start_tf_session():
+    tf.reset_default_graph()  # to be able to rerun the model without overwriting tf variables
+    # Start an interactive session
+    config = tf.ConfigProto(device_count={'GPU': 0})
+    sess = tf.InteractiveSession(config=config)
+    # sess = tf.InteractiveSession()
+    # ### Profiling
+    tf.RunOptions(trace_level=tf.RunOptions.FULL_TRACE)
+    return sess
+
+
+def explore_data(X_train, Y_train, X_test, Y_test, classes):
+    # ## Explore the dataset
+
+    print("number of training examples = " + str(X_train.shape[0]))
+    print("number of test examples = " + str(X_test.shape[0]))
+    print("X_train shape: " + str(X_train.shape))
+    print("Y_train shape: " + str(Y_train.shape))
+    print("X_test shape: " + str(X_test.shape))
+    print("Y_test shape: " + str(Y_test.shape))
+    print("classes shape: " + str(classes.shape))
+
+
+def load_data_helper():
+    # ## Import the dataset
+    # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc("../data/train_sounds.h5",
+    #                                                                                "../data/test_sounds.h5",
+    #                                                                                "../data/classes_sounds.h5")
+    # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
+    #     "../data/vectorized/90_10_split_from_train2/train_sounds.h5",
+    #     "../data/vectorized/90_10_split_from_train2/test_sounds.h5",
+    #     "../data/vectorized/90_10_split_from_train2/classes_sounds.h5")
+    # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data(
+    #     "../data/vectorized/90_10_split_from_train2_sample/train_sounds.h5",
+    #     "../data/vectorized/90_10_split_from_train2_sample/test_sounds.h5",
+    #     "../data/vectorized/90_10_split_from_train2_sample/classes_sounds.h5")
+    # X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data()  # sample data
+    X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_mfcc(
+        "../data/vectorized/mfcc_zero_context/train_sounds.h5",
+        "../data/vectorized/mfcc_zero_context/test_sounds.h5",
+        "../data/vectorized/mfcc_zero_context/classes_sounds.h5")  # mfcc data
+
+    X_train = X_train_orig
+    X_test = X_test_orig
+    # Y_train = convert_to_one_hot(Y_train_orig, len(classes))
+    # Y_test = convert_to_one_hot(Y_test_orig, len(classes))
+    Y_train = convert_strings_to_one_hot(Y_train_orig, classes)
+    Y_test = convert_strings_to_one_hot(Y_test_orig, classes)
+    return X_train, Y_train, X_test, Y_test, classes
+
+
+def train_from_scratch():
+    # get_ipython().magic('matplotlib notebook')
+    np.random.seed(1)
+
+    X_train, Y_train, X_test, Y_test, classes = load_data_helper()
+    explore_data(X_train, Y_train, X_test, Y_test, classes)
+
+    sess = start_tf_session()
+    run_metadata = tf.RunMetadata()  # enable profiling hooks before running the model
+
+    learning_rate = 0.001
+    num_epochs = 25
+    minibatch_size = 256
+    run_name = "N_MFCC-0_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
+
+    Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
+
+    saver = tf.train.Saver()  # create a saver for saving variables to disk after creating the model
+
+    # Define Tensor Board Settings after creating the graph
+
+    training_writer = tf.summary.FileWriter("../logs/{}/training".format(run_name), sess.graph)
+    testing_writer = tf.summary.FileWriter("../logs/{}/testing".format(run_name), sess.graph)
+
+    training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess,
+                                              training_writer, testing_writer,
+                                              learning_rate=learning_rate, minibatch_size=minibatch_size,
+                                              num_epochs=num_epochs)
+
+    # meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
+    save_model_to_disk(run_name, saver, sess)
+    save_profiling_data_to_disk(run_metadata, run_name)
+
+    print(sess.list_devices())
+
+    # test accuracy
+    print("%s: Checking current model's test accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+    model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size=256)
+
+    # train accuracy
+    print("%s: Checking current model's train accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+    model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
+
+    # ---------------
+    # print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
+    # print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
+    # print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
+
+    return training_costs, testing_costs
+
+
+def restore_model(ckpt_file="../saved_models/trained_model.ckpt", learning_rate=0.001):
+    sess = start_tf_session()
+    X_train, Y_train, X_test, Y_test, classes = load_data_helper()
+    explore_data(X_train, Y_train, X_test, Y_test, classes)
+    Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
+    saver = tf.train.Saver()  # create a saver for saving variables to disk
+    saver.restore(sess, ckpt_file)
+    print("%s: Restored the model successfully" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+    return X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate
+
+
+def main():
+    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate = restore_model(
+        "../saved_models/N_MFCC-0_alp-0.001_batchsz-256_ep-25/N_MFCC-0_alp-0.001_batchsz-256_ep-25.ckpt")
+
+    # test accuracy
+    print("%s: Checking current model's test accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+    model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size=256)
+
+    # train accuracy
+    print("%s: Checking current model's train accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+    model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
+
+
+if __name__ == '__main__':
+    main()
