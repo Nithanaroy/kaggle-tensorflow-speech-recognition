@@ -319,7 +319,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, tra
                     datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, iminibatch, minibatch_cost, "--"))
 
         # Print the cost every # epochs
-        if print_cost and epoch % 2 == 0:
+        if print_cost and epoch % PRINT_EVERY_N_EPOCHS == 0:
             training_costs.append(minibatch_cost)
             temp_cost = sess.run(cost, feed_dict={X: X_test, Y: Y_test})
             testing_costs.append(temp_cost)
@@ -507,9 +507,10 @@ def restore_model_and_run_accuracies(ckpt_file, learning_rate):
     print("%s: Training accuracy = %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), acc))
 
 
+PRINT_EVERY_N_EPOCHS = 10 # print and add a data point to tensor board once for these many epochs
 def main():
     learning_rate = 0.001
-    num_epochs = 10
+    num_epochs = 300
     minibatch_size = 256
     run_name = "N_indexedY_alp-%s_batchsz-%s_ep-%s_l1-0.01_l2-0.1_l3-1" % (learning_rate, minibatch_size, num_epochs)
     train_from_scratch(data_dir="../data/vectorized/90_10_split_from_train2/",

@@ -1,0 +1,2 @@
+model_checkpoint_path: "N_indexedY_alp-0.001_batchsz-256_ep-300_l1-0.01_l2-0.1_l3-1.ckpt"
+all_model_checkpoint_paths: "N_indexedY_alp-0.001_batchsz-256_ep-300_l1-0.01_l2-0.1_l3-1.ckpt"
