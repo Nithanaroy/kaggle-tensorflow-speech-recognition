@@ -212,7 +212,14 @@ def convert_strings_to_one_hot(Y, classes):
     return label_binarize(Y, classes=classes)
 
 
-def convert_to_one_hot(Y, C):
+def convert_to_one_hot(Y, classes):
+    """
+    converts a 1 dimensional numpy array of length n, to n dimensional 2-D numpy array
+    :param Y: numpy array to encode
+    :param classes: list of all possible values in Y
+    :return: one hot encoded 2-D array
+    """
+    C = len(classes)
     Y = np.eye(C)[Y.reshape(-1)]
     return Y
 
