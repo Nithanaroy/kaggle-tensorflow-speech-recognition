@@ -94,7 +94,7 @@ def initialize_parameters():
 #     - Flatten the previous output.
 #     - FULLYCONNECTED (FC) layer: outputs 30 classes one for each audio utterance
 
-def forward_propagation2(X):
+def forward_propagation2(X, is_training=True):
     """
     Implements the forward propagation for the model:
     CONV2D -> RELU -> MAXPOOL -> CONV2D -> RELU -> MAXPOOL -> FLATTEN -> FULLYCONNECTED
@@ -117,24 +117,47 @@ def forward_propagation2(X):
     regularizer5 = tf.contrib.layers.l2_regularizer(scale=10.0)
     regularizer6 = None
 
+    dropout_prob = None
+    if is_training:
+        dropout_prob = tf.placeholder(tf.float32, name='dropout_prob')
+
     Z1 = tf.layers.conv2d(X, 64, (20, 8), strides=[1, 1], padding='SAME',
                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
                           kernel_regularizer=regularizer6, name="z1")
     A1 = tf.nn.relu(Z1, name="a1")
-    P1 = tf.nn.max_pool(A1, ksize=[1, 1, 3, 1], strides=[1, 2, 1, 1], padding='SAME', name="p1")
+
+    if is_training:
+        D1 = tf.nn.dropout(A1, dropout_prob, name="d1")
+    else:
+        D1 = A1
+
+    P1 = tf.nn.max_pool(D1, ksize=[1, 1, 3, 1], strides=[1, 2, 1, 1], padding='SAME', name="p1")
     Z2 = tf.layers.conv2d(P1, 64, (10, 4), strides=[1, 1], padding='SAME',
                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
                           kernel_regularizer=regularizer6, name="z2")
     A2 = tf.nn.relu(Z2, name="a2")
-    P2 = tf.nn.max_pool(A2, ksize=[1, 1, 1, 1], strides=[1, 1, 1, 1], padding='SAME', name="p2")
+
+    if is_training:
+        D2 = tf.nn.dropout(A2, dropout_prob, name="d2")
+    else:
+        D2 = A2
+
+    P2 = tf.nn.max_pool(D2, ksize=[1, 1, 1, 1], strides=[1, 1, 1, 1], padding='SAME', name="p2")
     P3 = tf.contrib.layers.flatten(P2)
     Z3 = tf.contrib.layers.fully_connected(P3, 128, activation_fn=None, weights_regularizer=regularizer6)
     A3 = tf.nn.relu(Z3, name="a3")
-    Z4 = tf.contrib.layers.fully_connected(A3, 30, activation_fn=None, weights_regularizer=regularizer6)
-    return Z4
+
+    if is_training:
+        D3 = tf.nn.dropout(A1, dropout_prob, name="d3")
+    else:
+        D3 = A3
+
+    Z4 = tf.contrib.layers.fully_connected(D3, 30, activation_fn=None, weights_regularizer=regularizer6)
+
+    return Z4, dropout_prob
 
 
-def forward_propagation(X):
+def forward_propagation(X, is_training=True):
     regularizer1 = tf.contrib.layers.l2_regularizer(scale=0.001)
     regularizer2 = tf.contrib.layers.l2_regularizer(scale=0.01)
     regularizer3 = tf.contrib.layers.l2_regularizer(scale=0.1)
@@ -142,19 +165,35 @@ def forward_propagation(X):
     regularizer5 = tf.contrib.layers.l2_regularizer(scale=10.0)
     regularizer6 = None
 
+    dropout_prob = None
+    if is_training:
+        dropout_prob = tf.placeholder(tf.float32, name='dropout_prob')
+
     Z1 = tf.layers.conv2d(X, 8, (4, 1), strides=[1, 1], padding='SAME',
                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
                           kernel_regularizer=regularizer2, name="z1")
     A1 = tf.nn.relu(Z1, name="a1")
-    P1 = tf.nn.max_pool(A1, ksize=[1, 8, 1, 1], strides=[1, 8, 1, 1], padding='SAME', name="p1")
+
+    if is_training:
+        D1 = tf.nn.dropout(A1, dropout_prob, name="d1")
+    else:
+        D1 = A1
+
+    P1 = tf.nn.max_pool(D1, ksize=[1, 8, 1, 1], strides=[1, 8, 1, 1], padding='SAME', name="p1")
     Z2 = tf.layers.conv2d(P1, 16, (2, 1), strides=[1, 1], padding='SAME',
                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
                           kernel_regularizer=regularizer3, name="z2")
     A2 = tf.nn.relu(Z2, name="a2")
-    P2 = tf.nn.max_pool(A2, ksize=[1, 4, 1, 1], strides=[1, 4, 1, 1], padding='SAME', name="p2")
+
+    if is_training:
+        D2 = tf.nn.dropout(A2, dropout_prob, name="d2")
+    else:
+        D2 = A2
+
+    P2 = tf.nn.max_pool(D2, ksize=[1, 4, 1, 1], strides=[1, 4, 1, 1], padding='SAME', name="p2")
     P2 = tf.contrib.layers.flatten(P2)
     Z3 = tf.contrib.layers.fully_connected(P2, 30, activation_fn=None, weights_regularizer=regularizer4)
-    return Z3
+    return Z3, dropout_prob
 
 
 # tf.reset_default_graph()
@@ -205,7 +244,7 @@ def compute_cost(Z3, Y):
 
 # ## Define Model Accuracy
 
-def model_accuracy(X, Y, Z3, X_pl, Y_pl, minibatch_size=64, percent_data=100, print_progress=True):
+def model_accuracy(X, Y, Z3, X_pl, Y_pl, dropout_prob_pl, minibatch_size=64, percent_data=100, print_progress=True):
     """
     percent_data-- approximate max % amount of data to consider while computing accuracy
     """
@@ -220,7 +259,7 @@ def model_accuracy(X, Y, Z3, X_pl, Y_pl, minibatch_size=64, percent_data=100, pr
     minibatches = random_mini_batches(X, Y, minibatch_size)
     for minibatch in minibatches:
         (minibatch_X, minibatch_Y) = minibatch
-        acc_accuracy += accuracy.eval({X_pl: minibatch_X, Y_pl: minibatch_Y})
+        acc_accuracy += accuracy.eval({X_pl: minibatch_X, Y_pl: minibatch_Y, dropout_prob_pl: 0.0})
         num_minibatches += 1
 
         if print_progress and num_minibatches % 25 == 0:
@@ -244,7 +283,7 @@ def model_accuracy(X, Y, Z3, X_pl, Y_pl, minibatch_size=64, percent_data=100, pr
 # ### Tensorboard Static Settings
 
 
-def create_model(X_train, Y_train, learning_rate, forward_prop_handler=forward_propagation2):
+def create_model(X_train, Y_train, learning_rate, forward_prop_handler=forward_propagation2, is_training=True):
     """
     Implements a three-layer ConvNet in Tensorflow:
     CONV2D -> RELU -> MAXPOOL -> CONV2D -> RELU -> MAXPOOL -> FLATTEN -> FULLYCONNECTED
@@ -270,7 +309,7 @@ def create_model(X_train, Y_train, learning_rate, forward_prop_handler=forward_p
     n_y = Y_train.shape[1]
 
     X, Y = create_placeholders(n_l, n_h, n_y)
-    Z3 = forward_prop_handler(X)
+    Z3, dropout_prob = forward_prop_handler(X, is_training)
     cost = compute_cost(Z3, Y)
 
     # Backpropagation: Using AdamOptimizer to minimize the cost.
@@ -281,11 +320,12 @@ def create_model(X_train, Y_train, learning_rate, forward_prop_handler=forward_p
     # tf.summary.scalar('current_cost', cost)
     # summary = tf.summary.merge_all()
 
-    return Z3, X, Y, cost, optimizer
+    return Z3, X, Y, cost, optimizer, dropout_prob
 
 
 def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, training_writer, testing_writer,
-              learning_rate=0.011, minibatch_size=64, num_epochs=100, print_cost=True):
+              dropout_prob_pl, dropout_prob=0.5, learning_rate=0.011, minibatch_size=64, num_epochs=100,
+              print_cost=True):
     seed = 3  # to keep results consistent (numpy seed)
     m = X_train.shape[0]
     num_minibatches = int(np.ceil(m / float(minibatch_size)))
@@ -312,7 +352,8 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, tra
             (minibatch_X, minibatch_Y) = minibatch
             # IMPORTANT: The line that runs the graph on a minibatch.
             # Run the session to execute the optimizer and the cost, the feedict should contain a minibatch for (X,Y).
-            _, temp_cost = sess.run([optimizer, cost], feed_dict={X: minibatch_X, Y: minibatch_Y})
+            _, temp_cost = sess.run([optimizer, cost],
+                                    feed_dict={X: minibatch_X, Y: minibatch_Y, dropout_prob_pl: dropout_prob})
             minibatch_cost += temp_cost / num_minibatches
             if print_cost and epoch == 0 and iminibatch % 10 == 0:
                 print(" %s\t%i.%i\t%f\t%s" % (
@@ -321,7 +362,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, tra
         # Print the cost every # epochs
         if print_cost and epoch % PRINT_EVERY_N_EPOCHS == 0:
             training_costs.append(minibatch_cost)
-            temp_cost = sess.run(cost, feed_dict={X: X_test, Y: Y_test})
+            temp_cost = sess.run(cost, feed_dict={X: X_test, Y: Y_test, dropout_prob_pl: 0.0})
             testing_costs.append(temp_cost)
             print("%s\t%i\t%f\t%f" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, minibatch_cost, temp_cost))
 
@@ -425,23 +466,25 @@ def load_data_helper(data_dir="../data/vectorized/90_10_split_from_train2/",
 
 def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
                        forward_prop_handler=forward_propagation,
-                       learning_rate=0.001, num_epochs=25, minibatch_size=256,
+                       dropout_prob=0.5, learning_rate=0.001, num_epochs=25, minibatch_size=256,
                        run_name="Run at %s " % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),),
-                       minibatch_size_for_accuracy=256):
+                       minibatch_size_for_accuracy=256, gpu_count=0):
     # get_ipython().magic('matplotlib notebook')
     np.random.seed(1)
 
     X_train, Y_train, X_test, Y_test, classes = load_data_helper(data_dir, load_data_handler, one_hot_encoding_handler)
     explore_data(X_train, Y_train, X_test, Y_test, classes)
 
-    sess = start_tf_session(gpu_count=0)
+    sess = start_tf_session(gpu_count=gpu_count)
     run_metadata = tf.RunMetadata()  # enable profiling hooks before running the model
 
     if not run_name:
         run_name = "N_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
 
-    Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate,
-                                             forward_prop_handler=forward_prop_handler)
+    Z3, X, Y, cost, optimizer, dropout_prob_pl = create_model(X_train, Y_train,
+                                                              is_training=True,
+                                                              learning_rate=learning_rate,
+                                                              forward_prop_handler=forward_prop_handler)
 
     saver = tf.train.Saver()  # create a saver for saving variables to disk after creating the model
 
@@ -451,9 +494,9 @@ def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
     testing_writer = tf.summary.FileWriter("../logs/{}/testing".format(run_name), sess.graph)
 
     training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess,
-                                              training_writer, testing_writer,
-                                              learning_rate=learning_rate, minibatch_size=minibatch_size,
-                                              num_epochs=num_epochs)
+                                              training_writer, testing_writer, dropout_prob_pl,
+                                              dropout_prob=dropout_prob, learning_rate=learning_rate,
+                                              minibatch_size=minibatch_size, num_epochs=num_epochs)
 
     # meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
     save_model_to_disk(run_name, saver, sess)
@@ -463,7 +506,7 @@ def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
 
     try:
         # test accuracy
-        acc = model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size=minibatch_size_for_accuracy)
+        acc = model_accuracy(X_test, Y_test, Z3, X, Y, dropout_prob_pl, minibatch_size=minibatch_size_for_accuracy)
         print("%s: Test accuracy = %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), acc))
     except:
         print("%s: Exception while computing test accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
@@ -471,7 +514,7 @@ def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
 
     try:
         # train accuracy
-        acc = model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=minibatch_size_for_accuracy)
+        acc = model_accuracy(X_train, Y_train, Z3, X, Y, dropout_prob_pl, minibatch_size=minibatch_size_for_accuracy)
         print("%s: Training accuracy = %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), acc))
     except:
         print("%s: Exception while computing train accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
@@ -489,37 +532,39 @@ def restore_model(ckpt_file="../saved_models/trained_model.ckpt", learning_rate=
     sess = start_tf_session()
     X_train, Y_train, X_test, Y_test, classes = load_data_helper()
     explore_data(X_train, Y_train, X_test, Y_test, classes)
-    Z3, X, Y, cost, optimizer = create_model(X_train, Y_train, learning_rate=learning_rate)
+    Z3, X, Y, cost, optimizer, dropout_prob_pl = create_model(X_train, Y_train, learning_rate=learning_rate)
     saver = tf.train.Saver()  # create a saver for saving variables to disk
     saver.restore(sess, ckpt_file)
     print("%s: Restored the model successfully" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
-    return X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate
+    return X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl
 
 
 def restore_model_and_run_accuracies(ckpt_file, learning_rate):
-    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate = restore_model(
+    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl = restore_model(
         ckpt_file, learning_rate)
     # test accuracy
-    acc = model_accuracy(X_test, Y_test, Z3, X, Y, minibatch_size=256)
+    acc = model_accuracy(X_test, Y_test, Z3, X, Y, dropout_prob_pl, minibatch_size=256)
     print("%s: Test accuracy = %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), acc))
     # train accuracy
-    acc = model_accuracy(X_train, Y_train, Z3, X, Y, minibatch_size=256)
+    acc = model_accuracy(X_train, Y_train, Z3, X, Y, dropout_prob_pl, minibatch_size=256)
     print("%s: Training accuracy = %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), acc))
 
 
-PRINT_EVERY_N_EPOCHS = 10 # print and add a data point to tensor board once for these many epochs
+PRINT_EVERY_N_EPOCHS = 1  # print and add a data point to tensor board once for these many epochs
+
+
 def main():
-    learning_rate = 0.001
-    num_epochs = 300
-    minibatch_size = 256
-    run_name = "N_indexedY_alp-%s_batchsz-%s_ep-%s_l1-0.01_l2-0.1_l3-1" % (learning_rate, minibatch_size, num_epochs)
-    train_from_scratch(data_dir="../data/vectorized/90_10_split_from_train2/",
-                       load_data_handler=load_data,
-                       one_hot_encoding_handler=convert_to_one_hot,
-                       forward_prop_handler=forward_propagation,
+    learning_rate = 0.01
+    num_epochs = 20
+    minibatch_size = 64
+    run_name = "N_MFCC_zero_GPU_indexedY_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
+    train_from_scratch(data_dir="../data/vectorized/mfcc_zero_context/",
+                       load_data_handler=load_data_mfcc,
+                       one_hot_encoding_handler=convert_strings_to_one_hot,
+                       forward_prop_handler=forward_propagation2,
                        learning_rate=learning_rate, num_epochs=num_epochs, minibatch_size=minibatch_size,
                        run_name=run_name,
-                       minibatch_size_for_accuracy=256)
+                       minibatch_size_for_accuracy=256, gpu_count=1)
 
 
 if __name__ == '__main__':
