@@ -15,9 +15,11 @@ from tensorflow.python.client import timeline  # for profiling
 from math import ceil
 import os
 import traceback
+from time import time
 
 # A way to hint the trainer to stop training on the next epoch
 STOP_TRAINING_ON_NEXT_EPOCH = "STOP_TRAINING_ON_NEXT_EPOCH"
+VERY_SMALL_NUMBER = 1e10
 
 
 # ## Create input placeholders
@@ -171,7 +173,7 @@ def forward_propagation(X, is_training=True):
 
     Z1 = tf.layers.conv2d(X, 8, (4, 1), strides=[1, 1], padding='SAME',
                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
-                          kernel_regularizer=regularizer2, name="z1")
+                          kernel_regularizer=regularizer6, name="z1")
     A1 = tf.nn.relu(Z1, name="a1")
 
     if is_training:
@@ -182,7 +184,7 @@ def forward_propagation(X, is_training=True):
     P1 = tf.nn.max_pool(D1, ksize=[1, 8, 1, 1], strides=[1, 8, 1, 1], padding='SAME', name="p1")
     Z2 = tf.layers.conv2d(P1, 16, (2, 1), strides=[1, 1], padding='SAME',
                           kernel_initializer=tf.contrib.layers.xavier_initializer_conv2d(seed=0),
-                          kernel_regularizer=regularizer3, name="z2")
+                          kernel_regularizer=regularizer6, name="z2")
     A2 = tf.nn.relu(Z2, name="a2")
 
     if is_training:
@@ -192,7 +194,7 @@ def forward_propagation(X, is_training=True):
 
     P2 = tf.nn.max_pool(D2, ksize=[1, 4, 1, 1], strides=[1, 4, 1, 1], padding='SAME', name="p2")
     P2 = tf.contrib.layers.flatten(P2)
-    Z3 = tf.contrib.layers.fully_connected(P2, 30, activation_fn=None, weights_regularizer=regularizer4)
+    Z3 = tf.contrib.layers.fully_connected(P2, 30, activation_fn=None, weights_regularizer=regularizer6)
     return Z3, dropout_prob
 
 
@@ -259,7 +261,10 @@ def model_accuracy(X, Y, Z3, X_pl, Y_pl, dropout_prob_pl, minibatch_size=64, per
     minibatches = random_mini_batches(X, Y, minibatch_size)
     for minibatch in minibatches:
         (minibatch_X, minibatch_Y) = minibatch
-        acc_accuracy += accuracy.eval({X_pl: minibatch_X, Y_pl: minibatch_Y, dropout_prob_pl: 0.0})
+        if dropout_prob_pl:
+            acc_accuracy += accuracy.eval({X_pl: minibatch_X, Y_pl: minibatch_Y, dropout_prob_pl: VERY_SMALL_NUMBER})
+        else:
+            acc_accuracy += accuracy.eval({X_pl: minibatch_X, Y_pl: minibatch_Y})
         num_minibatches += 1
 
         if print_progress and num_minibatches % 25 == 0:
@@ -331,6 +336,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, tra
     num_minibatches = int(np.ceil(m / float(minibatch_size)))
     training_costs = []
     testing_costs = []
+    saver = tf.train.Saver()
 
     # Run the initialization
     init = tf.group(tf.global_variables_initializer(), tf.local_variables_initializer())
@@ -362,7 +368,7 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, tra
         # Print the cost every # epochs
         if print_cost and epoch % PRINT_EVERY_N_EPOCHS == 0:
             training_costs.append(minibatch_cost)
-            temp_cost = sess.run(cost, feed_dict={X: X_test, Y: Y_test, dropout_prob_pl: 0.0})
+            temp_cost = sess.run(cost, feed_dict={X: X_test, Y: Y_test, dropout_prob_pl: VERY_SMALL_NUMBER})
             testing_costs.append(temp_cost)
             print("%s\t%i\t%f\t%f" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), epoch, minibatch_cost, temp_cost))
 
@@ -372,6 +378,10 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, tra
             training_writer.add_summary(training_summary, epoch)
             testing_writer.add_summary(testing_summary, epoch)
 
+        if epoch % 100 == 0:
+            # Save current variables to disk
+            save_model_to_disk("Intermediate-epoch-%s-at-%s" % (epoch, time()), saver, sess)
+
     # plot_cost_test_train(len(training_costs), training_costs, testing_costs, "Learning rate = %s" % learning_rate)
     # plot_cost_test_train_same_scale(num_epochs, training_costs, testing_costs, "Learning rate = %s" % learning_rate)
     return training_costs, testing_costs
@@ -379,20 +389,20 @@ def run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess, tra
 
 def stop_early():
     # For early manual stopping using the global environment variable
-    msg_template = "I see you asked me to stop training using the environment variable, '%s'. Are you sure you want me to stop [yes/no]? "
-    if STOP_TRAINING_ON_NEXT_EPOCH in os.environ and os.environ[STOP_TRAINING_ON_NEXT_EPOCH] == "Y":
-        while True:
-            response = input(msg_template % (STOP_TRAINING_ON_NEXT_EPOCH,))
-            if response == "yes":
-                print("Stopped training. Continuing with next steps")
-                return True
-            elif response == "no":
-                print(
-                    "Continuing to train. I'll ask you again if you set the value of the enviroment variable, '%s' to Y before starting the next epoch." % (
-                        STOP_TRAINING_ON_NEXT_EPOCH,))
-                return False
-            else:
-                print("Could not understand what you said. Type yes if you want me to stop training, else no.")
+    msg_template = "I see you asked me to stop training via the file. Are you sure you want me to stop [yes/no]? "
+    with open("stop_next_epoch.txt") as f:
+        if f.readline().strip() == "Y":
+            while True:
+                response = input(msg_template)
+                if response == "yes":
+                    print("Stopped training. Continuing with next steps")
+                    return True
+                elif response == "no":
+                    print(
+                        "Continuing to train. I'll ask you again if you write Y in the file, before starting the next epoch.")
+                    return False
+                else:
+                    print("Could not understand what you said. Type yes if you want me to stop training, else no.")
 
 
 # ### Save profiling data to disk
@@ -451,7 +461,7 @@ def explore_data(X_train, Y_train, X_test, Y_test, classes):
 
 def load_data_helper(data_dir="../data/vectorized/90_10_split_from_train2/",
                      load_data_handler=load_data,
-                     one_hot_encoding_handler=convert_strings_to_one_hot):
+                     one_hot_encoding_handler=convert_to_one_hot):
     # ## Import the dataset
     X_train_orig, Y_train_orig, X_test_orig, Y_test_orig, classes = load_data_handler(
         os.path.join(data_dir, "train_sounds.h5"),
@@ -528,20 +538,22 @@ def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
     return training_costs, testing_costs
 
 
-def restore_model(ckpt_file="../saved_models/trained_model.ckpt", learning_rate=0.001):
+def restore_model(ckpt_file, learning_rate, forward_prop_handler, load_model_in_train_mode=False):
     sess = start_tf_session()
     X_train, Y_train, X_test, Y_test, classes = load_data_helper()
     explore_data(X_train, Y_train, X_test, Y_test, classes)
-    Z3, X, Y, cost, optimizer, dropout_prob_pl = create_model(X_train, Y_train, learning_rate=learning_rate)
+    Z3, X, Y, cost, optimizer, dropout_prob_pl = create_model(X_train, Y_train, learning_rate=learning_rate,
+                                                              forward_prop_handler=forward_prop_handler,
+                                                              is_training=load_model_in_train_mode)
     saver = tf.train.Saver()  # create a saver for saving variables to disk
     saver.restore(sess, ckpt_file)
     print("%s: Restored the model successfully" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
     return X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl
 
 
-def restore_model_and_run_accuracies(ckpt_file, learning_rate):
+def restore_model_and_run_accuracies(ckpt_file, learning_rate, forward_prop_handler):
     X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl = restore_model(
-        ckpt_file, learning_rate)
+        ckpt_file, learning_rate, forward_prop_handler, False)
     # test accuracy
     acc = model_accuracy(X_test, Y_test, Z3, X, Y, dropout_prob_pl, minibatch_size=256)
     print("%s: Test accuracy = %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), acc))
@@ -554,17 +566,24 @@ PRINT_EVERY_N_EPOCHS = 1  # print and add a data point to tensor board once for 
 
 
 def main():
-    learning_rate = 0.01
-    num_epochs = 20
-    minibatch_size = 64
-    run_name = "N_MFCC_zero_GPU_indexedY_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
-    train_from_scratch(data_dir="../data/vectorized/mfcc_zero_context/",
-                       load_data_handler=load_data_mfcc,
-                       one_hot_encoding_handler=convert_strings_to_one_hot,
-                       forward_prop_handler=forward_propagation2,
-                       learning_rate=learning_rate, num_epochs=num_epochs, minibatch_size=minibatch_size,
-                       run_name=run_name,
-                       minibatch_size_for_accuracy=256, gpu_count=1)
+    # learning_rate = 0.01
+    # num_epochs = 150
+    # minibatch_size = 512
+    # dropout_prob = 0.5
+    # run_name = "N_indexedY_alp-%s_batchsz-%s_ep-%s_dropout-%s" % (
+    #     learning_rate, minibatch_size, num_epochs, dropout_prob)
+    # train_from_scratch(data_dir="../data/vectorized/90_10_split_from_train2/",
+    #                    load_data_handler=load_data,
+    #                    one_hot_encoding_handler=convert_to_one_hot,
+    #                    forward_prop_handler=forward_propagation,
+    #                    dropout_prob=dropout_prob,
+    #                    learning_rate=learning_rate, num_epochs=num_epochs, minibatch_size=minibatch_size,
+    #                    run_name=run_name,
+    #                    minibatch_size_for_accuracy=256, gpu_count=0)
+
+    restore_model_and_run_accuracies(
+        "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5.ckpt",
+        0.001, forward_propagation)
 
 
 if __name__ == '__main__':
