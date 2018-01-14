@@ -1,0 +1,2 @@
+model_checkpoint_path: "N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5.ckpt"
+all_model_checkpoint_paths: "N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5.ckpt"

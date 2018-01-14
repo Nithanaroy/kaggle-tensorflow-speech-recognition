@@ -1,0 +1,3 @@
+model_checkpoint_path: "Intermediate-epoch-100-at-1515934241.3263793.ckpt"
+all_model_checkpoint_paths: "../Intermediate-epoch-0-at-1515922258.2251441/Intermediate-epoch-0-at-1515922258.2251441.ckpt"
+all_model_checkpoint_paths: "Intermediate-epoch-100-at-1515934241.3263793.ckpt"

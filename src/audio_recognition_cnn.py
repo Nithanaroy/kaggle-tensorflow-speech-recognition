@@ -486,34 +486,34 @@ def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
     explore_data(X_train, Y_train, X_test, Y_test, classes)
 
     sess = start_tf_session(gpu_count=gpu_count)
-    run_metadata = tf.RunMetadata()  # enable profiling hooks before running the model
-
-    if not run_name:
-        run_name = "N_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
 
     Z3, X, Y, cost, optimizer, dropout_prob_pl = create_model(X_train, Y_train,
                                                               is_training=True,
                                                               learning_rate=learning_rate,
                                                               forward_prop_handler=forward_prop_handler)
+    testing_costs, training_costs = train(X, X_test, X_train, Y, Y_test, Y_train, Z3, cost, dropout_prob,
+                                          dropout_prob_pl, learning_rate, minibatch_size, minibatch_size_for_accuracy,
+                                          num_epochs, optimizer, run_name, sess)
+    return testing_costs, training_costs
 
+
+def train(X, X_test, X_train, Y, Y_test, Y_train, Z3, cost, dropout_prob, dropout_prob_pl, learning_rate,
+          minibatch_size, minibatch_size_for_accuracy, num_epochs, optimizer, run_name, sess):
+    run_metadata = tf.RunMetadata()  # enable profiling hooks before running the model
+    if not run_name:
+        run_name = "N_alp-%s_batchsz-%s_ep-%s" % (learning_rate, minibatch_size, num_epochs)
     saver = tf.train.Saver()  # create a saver for saving variables to disk after creating the model
-
     # Define Tensor Board Settings after creating the graph
-
     training_writer = tf.summary.FileWriter("../logs/{}/training".format(run_name), sess.graph)
     testing_writer = tf.summary.FileWriter("../logs/{}/testing".format(run_name), sess.graph)
-
     training_costs, testing_costs = run_model(X_train, Y_train, X_test, Y_test, X, Y, cost, optimizer, sess,
                                               training_writer, testing_writer, dropout_prob_pl,
                                               dropout_prob=dropout_prob, learning_rate=learning_rate,
                                               minibatch_size=minibatch_size, num_epochs=num_epochs)
-
     # meta_graph_def = tf.train.export_meta_graph(filename='../saved_models/my-cnn-tf-model.meta')
     save_model_to_disk(run_name, saver, sess)
     save_profiling_data_to_disk(run_metadata, run_name)
-
     print(sess.list_devices())
-
     try:
         # test accuracy
         acc = model_accuracy(X_test, Y_test, Z3, X, Y, dropout_prob_pl, minibatch_size=minibatch_size_for_accuracy)
@@ -521,7 +521,6 @@ def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
     except:
         print("%s: Exception while computing test accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
         traceback.print_exc()
-
     try:
         # train accuracy
         acc = model_accuracy(X_train, Y_train, Z3, X, Y, dropout_prob_pl, minibatch_size=minibatch_size_for_accuracy)
@@ -529,18 +528,16 @@ def train_from_scratch(data_dir, load_data_handler, one_hot_encoding_handler,
     except:
         print("%s: Exception while computing train accuracy" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
         traceback.print_exc()
-
     # ---------------
     # print(inference("../data/train/audio/bed/0a7c2a8d_nohash_0.wav", Z3))  # bed
     # print(inference("../data/train/audio/down/0a7c2a8d_nohash_0.wav", Z3))  # down
     # print(inference("../data/test/audio/clip_0000adecb.wav", Z3))  # happy
-
-    return training_costs, testing_costs
+    return testing_costs, training_costs
 
 
 def restore_model(ckpt_file, learning_rate, forward_prop_handler, load_model_in_train_mode=False):
     sess = start_tf_session()
-    X_train, Y_train, X_test, Y_test, classes = load_data_helper()
+    X_train, Y_train, X_test, Y_test, classes = load_data_helper()  # TODO Take correct arguments
     explore_data(X_train, Y_train, X_test, Y_test, classes)
     Z3, X, Y, cost, optimizer, dropout_prob_pl = create_model(X_train, Y_train, learning_rate=learning_rate,
                                                               forward_prop_handler=forward_prop_handler,
@@ -548,11 +545,11 @@ def restore_model(ckpt_file, learning_rate, forward_prop_handler, load_model_in_
     saver = tf.train.Saver()  # create a saver for saving variables to disk
     saver.restore(sess, ckpt_file)
     print("%s: Restored the model successfully" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
-    return X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl
+    return X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl, sess
 
 
 def restore_model_and_run_accuracies(ckpt_file, learning_rate, forward_prop_handler):
-    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl = restore_model(
+    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl, sess = restore_model(
         ckpt_file, learning_rate, forward_prop_handler, False)
     # test accuracy
     acc = model_accuracy(X_test, Y_test, Z3, X, Y, dropout_prob_pl, minibatch_size=256)
@@ -562,16 +559,33 @@ def restore_model_and_run_accuracies(ckpt_file, learning_rate, forward_prop_hand
     print("%s: Training accuracy = %s" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), acc))
 
 
-PRINT_EVERY_N_EPOCHS = 1  # print and add a data point to tensor board once for these many epochs
+def restore_model_and_train(ckpt_file, learning_rate, forward_prop_handler, dropout_prob, minibatch_size,
+                            minibatch_size_for_accuracy, num_epochs, run_name):
+    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl, sess = restore_model(
+        ckpt_file, learning_rate, forward_prop_handler, True)
+    return train(X, X_test, X_train, Y, Y_test, Y_train, Z3, cost, dropout_prob, dropout_prob_pl, learning_rate,
+                 minibatch_size, minibatch_size_for_accuracy, num_epochs, optimizer, run_name, sess)
+
+
+def restore_model_and_infer(audio_files, ckpt_file, learning_rate, forward_prop_handler):
+    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl, sess = restore_model(
+        ckpt_file, learning_rate, forward_prop_handler, False)
+    classes = dict([[int(i[1]), i[0]] for i in
+                    classes.astype("str")])  # map list to dict for easy lookup of classes given an index
+    for audio in audio_files:
+        print(inference(audio, sess, X, classes, Z3))
+
+
+PRINT_EVERY_N_EPOCHS = 5  # print and add a data point to tensor board once for these many epochs
 
 
 def main():
-    # learning_rate = 0.01
-    # num_epochs = 150
-    # minibatch_size = 512
-    # dropout_prob = 0.5
-    # run_name = "N_indexedY_alp-%s_batchsz-%s_ep-%s_dropout-%s" % (
-    #     learning_rate, minibatch_size, num_epochs, dropout_prob)
+    learning_rate = 0.01
+    num_epochs = 300
+    minibatch_size = 512
+    dropout_prob = 0.5
+    run_name = "N_indexedY_alp-%s_batchsz-%s_ep-150-to-450_dropout-%s" % (
+        learning_rate, minibatch_size, dropout_prob)
     # train_from_scratch(data_dir="../data/vectorized/90_10_split_from_train2/",
     #                    load_data_handler=load_data,
     #                    one_hot_encoding_handler=convert_to_one_hot,
@@ -581,9 +595,19 @@ def main():
     #                    run_name=run_name,
     #                    minibatch_size_for_accuracy=256, gpu_count=0)
 
-    restore_model_and_run_accuracies(
-        "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5.ckpt",
-        0.001, forward_propagation)
+    # restore_model_and_run_accuracies(
+    #     "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt",
+    #     0.001, forward_propagation)
+
+    evaluate = ["../data/train/audio/bed/0a7c2a8d_nohash_0.wav", "../data/train/audio/down/0a7c2a8d_nohash_0.wav",
+                "../data/test/audio/clip_0000adecb.wav"]
+    restore_model_and_infer(evaluate,
+                            "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt",
+                            0.001, forward_propagation)
+
+    # ckpt_file = "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5.ckpt"
+    # restore_model_and_train(ckpt_file, learning_rate, forward_propagation, dropout_prob, minibatch_size,
+    #                         256, num_epochs, run_name)
 
 
 if __name__ == '__main__':
