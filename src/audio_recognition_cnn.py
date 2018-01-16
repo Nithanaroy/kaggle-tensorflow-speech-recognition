@@ -422,12 +422,32 @@ def save_profiling_data_to_disk(run_metadata, run_name):
 # - Find the maximal class
 # - Remap index to class name
 
-def inference(audio_file, sess, X, classes, Z3):
+def inference(audio_file, sess, X, classes, Z3, required_classes):
     ra = load_wav_file(os.path.abspath(audio_file))
     x = ra.reshape(1, ra.shape[0], 1, 1)
     y_hat = tf.argmax(Z3, 1)
     prediction = sess.run(y_hat, feed_dict={X: x})
-    return classes[prediction[0]]
+    return classes[prediction[0]] if classes[prediction[0]] in required_classes else "unknown"
+
+
+def inference2(eval_folder, X_pl, Z3, sess, lookup, mini_batch_size=64):
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'
+    predict_op = tf.argmax(Z3, 1)
+    lookup_tensor = tf.constant(lookup, tf.string)
+    table = tf.contrib.lookup.index_to_string_table_from_tensor(lookup_tensor, default_value="unknown", name="map")
+    values = table.lookup(predict_op)
+    tf.tables_initializer().run()
+
+    for i, res in enumerate(vectorized_evaluation_chunks(eval_folder, mini_batch_size)):
+        if i == 0: print(" %s: Fetched chunk" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+        X_mini, filenames = res
+        X_mini = X_mini.reshape(X_mini.shape[0], X_mini.shape[1], 1, 1)
+        if i == 0: print(" %s: Reshaped chunk" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
+        predictions = sess.run(values, feed_dict={X_pl: X_mini}).astype("str")
+        if i % 25 == 0:
+            print("%s: Completed %sth batch" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), i))
+
+        yield zip(filenames, predictions)
 
 
 def save_model_to_disk(run_name, saver, sess):
@@ -568,18 +588,23 @@ def restore_model_and_train(ckpt_file, learning_rate, forward_prop_handler, drop
 
 
 def restore_model_and_infer(audio_files, ckpt_file, learning_rate, forward_prop_handler):
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Minimize TF logging
     X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl, sess = restore_model(
         ckpt_file, learning_rate, forward_prop_handler, False)
-    classes = dict([[int(i[1]), i[0]] for i in
-                    classes.astype("str")])  # map list to dict for easy lookup of classes given an index
-    for audio in audio_files:
-        print(inference(audio, sess, X, classes, Z3))
+    # map list to dict for easy lookup of classes given an index
+    classes = dict([[int(i[1]), i[0]] for i in classes.astype("str")])
+    known_classes = ("yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "silence", "unknown")
+    for i, audio in enumerate(audio_files):
+        if i % 10000 == 0:
+            print("%s: Completed processing %s files" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), i))
+        yield os.path.basename(audio), inference(audio, sess, X, classes, Z3, known_classes)
 
 
 PRINT_EVERY_N_EPOCHS = 5  # print and add a data point to tensor board once for these many epochs
 
 
 def main():
+    print("%s: Started computation" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
     learning_rate = 0.01
     num_epochs = 300
     minibatch_size = 512
@@ -599,19 +624,55 @@ def main():
     #     "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt",
     #     0.001, forward_propagation)
 
-    evaluate = ["../data/train/audio/bed/0a7c2a8d_nohash_0.wav", "../data/train/audio/down/0a7c2a8d_nohash_0.wav",
-                "../data/test/audio/clip_0000adecb.wav"]
-    restore_model_and_infer(evaluate,
-                            "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt",
-                            0.001, forward_propagation)
+    # evaluate = ["../data/train/audio/bed/0a7c2a8d_nohash_0.wav", "../data/train/audio/down/0a7c2a8d_nohash_0.wav",
+    #             "../data/test/audio/clip_0000adecb.wav"]
+    # test_folder = "../data/test/audio"
+    # model = "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt"
+    # evaluate = [os.path.join(test_folder, f) for f in os.listdir(test_folder)]
+    # with open("../data/submission.csv", "w") as f:
+    #     f.write("fname,label\n")
+    #     try:
+    #         for i, row in enumerate(restore_model_and_infer(evaluate, model, 0.001, forward_propagation)):
+    #             f.write(",".join(row) + "\n")
+    #             if i % 1000 == 0:
+    #                 f.flush()
+    #     except:
+    #         f.flush()
+    #         traceback.print_exc()
+
+    model = "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt"
+    X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl, sess = restore_model(
+        model, learning_rate, forward_propagation, False)
+    known_classes = ("yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "silence", "unknown")
+    lookup = [d[1] if d[1] in known_classes else "unknown" for d in
+              sorted([(int(c[1]), c[0]) for c in classes.astype("str")])]
+    X_train = None
+    Y_train = None
+    X_test = None
+    Y_test = None
+    gc.collect()
+    with open("../data/submission_vector.csv", "w") as f:
+        f.write("fname,label\n")
+        try:
+            for i, batch in enumerate(inference2("../data/test/audio/", X, Z3, sess, lookup, 512)):
+                f.write("\n".join([",".join(row) for row in batch]) + "\n")
+                if i % 10000 == 0:
+                    f.flush()
+                    print("%s: Saved %s rows in total" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'), i))
+        except:
+            f.flush()
+            traceback.print_exc()
 
     # ckpt_file = "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5/N_indexedY_alp-0.01_batchsz-512_ep-150_dropout-0.5.ckpt"
     # restore_model_and_train(ckpt_file, learning_rate, forward_propagation, dropout_prob, minibatch_size,
     #                         256, num_epochs, run_name)
+
+    print("%s: Completed computation" % (datetime.now().strftime('%Y-%m-%d %H:%M:%S'),))
 
 
 if __name__ == '__main__':
     if STOP_TRAINING_ON_NEXT_EPOCH in os.environ:
         print("\nReminding you the value of the environment variable '%s' = %s\n",
               (STOP_TRAINING_ON_NEXT_EPOCH, os.environ[STOP_TRAINING_ON_NEXT_EPOCH]))
+    os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Minimize TF logging
     main()
