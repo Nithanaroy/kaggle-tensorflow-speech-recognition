@@ -621,7 +621,7 @@ def main():
     #                    minibatch_size_for_accuracy=256, gpu_count=0)
 
     # restore_model_and_run_accuracies(
-    #     "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt",
+    #     "../saved_models/l2_10_300e_256b_lambda1-0.01_lambda2-0.1_lambda3-1_alpha-0.001/l2_10_300e_256b_l2-reg-0.01_alpha-0.001.ckpt",
     #     0.001, forward_propagation)
 
     # evaluate = ["../data/train/audio/bed/0a7c2a8d_nohash_0.wav", "../data/train/audio/down/0a7c2a8d_nohash_0.wav",
@@ -640,7 +640,7 @@ def main():
     #         f.flush()
     #         traceback.print_exc()
 
-    model = "../saved_models/N_indexedY_alp-0.01_batchsz-512_ep-150-to-450_dropout-0.5/Intermediate-epoch-200-at-1515946211.0558753/Intermediate-epoch-200-at-1515946211.0558753.ckpt"
+    model = "../saved_models/l2_10_300e_256b_lambda1-0.01_lambda2-0.1_lambda3-1_alpha-0.001/l2_10_300e_256b_l2-reg-0.01_alpha-0.001.ckpt"
     X_train, Y_train, X_test, Y_test, classes, Z3, X, Y, cost, optimizer, learning_rate, dropout_prob_pl, sess = restore_model(
         model, learning_rate, forward_propagation, False)
     known_classes = ("yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "silence", "unknown")
